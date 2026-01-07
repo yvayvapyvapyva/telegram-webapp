@@ -1,24 +1,24 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <title>Telegram Web App</title>
+<button onclick="getLocation()">Отправить геопозицию</button>
 
-  <!-- Telegram WebApp SDK -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-</head>
-<body>
-
-  <h2>Мой первый Telegram Web App</h2>
-  <button onclick="sendData()">Отправить данные боту</button>
-
-  <script>
-    Telegram.WebApp.ready();
-
-    function sendData() {
-      Telegram.WebApp.sendData("Привет из Web App 🚀");
+<script>
+function getLocation() {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(sendPosition, showError);
+    } else {
+        alert("Геолокация не поддерживается браузером");
     }
-  </script>
+}
 
-</body>
-</html>
+function sendPosition(position) {
+    const data = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude
+    };
+    // Отправляем боту через Telegram.WebApp.sendData
+    Telegram.WebApp.sendData(JSON.stringify(data));
+}
+
+function showError(error) {
+    alert("Ошибка получения геопозиции: " + error.message);
+}
+</script>
