@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>GPS + Азимут (рабочая версия)</title>
+<title>GPS + Поворот карты</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <script src="https://api-maps.yandex.ru/2.1/?apikey=ВАШ_API_КЛЮЧ&lang=ru_RU"></script>
@@ -27,9 +27,11 @@ ymaps.ready(init);
 function init() {
     map = new ymaps.Map("map", {
         center: [55.751574, 37.573856],
-        zoom: 17
+        zoom: 18,
+        controls: []
     });
 
+    // Стрелка всегда "вверх"
     const svgArrow = `
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
             <polygon points="50,0 90,100 50,75 10,100" fill="red"/>
@@ -43,8 +45,7 @@ function init() {
             iconLayout: 'default#image',
             iconImageHref: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svgArrow),
             iconImageSize: [40, 40],
-            iconImageOffset: [-20, -20],
-            iconRotate: 0
+            iconImageOffset: [-20, -20]
         }
     );
 
@@ -59,11 +60,11 @@ function watchLocation() {
     navigator.geolocation.watchPosition(pos => {
         const coords = [pos.coords.latitude, pos.coords.longitude];
         placemark.geometry.setCoordinates(coords);
-        map.setCenter(coords, map.getZoom(), { duration: 200 });
+        map.setCenter(coords, map.getZoom(), { duration: 100 });
     }, console.error, { enableHighAccuracy: true });
 }
 
-// Азимут
+// Азимут → поворот карты
 function watchAzimuth() {
     if (typeof DeviceOrientationEvent === 'undefined') return;
 
@@ -94,7 +95,7 @@ function handleOrientation(e) {
     }
 
     if (heading !== undefined) {
-        placemark.options.set('iconRotate', heading);
+        map.setBearing(heading, { duration: 100 });
     }
 }
 </script>
