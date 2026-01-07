@@ -1,33 +1,82 @@
-<button onclick="startAutoSpeak()">Начать озвучивание</button>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Озвучивание расстояния до точки</title>
+<style>
+  body { font-family: sans-serif; text-align: center; padding: 30px; }
+  input { font-size: 16px; margin: 5px; width: 120px; }
+  button { font-size: 16px; padding: 8px 16px; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<h1>Навигация с озвучкой</h1>
+<p>Введите координаты цели:</p>
+
+<label>Широта: <input type="number" id="targetLat" step="0.00001"></label><br>
+<label>Долгота: <input type="number" id="targetLon" step="0.00001"></label><br><br>
+<button onclick="startNavigation()">Начать навигацию</button>
 
 <script>
 let intervalId;
 
-function startAutoSpeak() {
-    if (!navigator.geolocation) {
-        alert("Геолокация не поддерживается браузером");
+// Функция вычисления расстояния между точками (метры) - формула Хаверсин
+function getDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // Радиус Земли в метрах
+    const toRad = x => x * Math.PI / 180;
+
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+
+    const a = Math.sin(dLat/2)**2 +
+              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c;
+}
+
+// Озвучивание текста
+function speak(text) {
+    speechSynthesis.cancel(); // отменяем предыдущую озвучку
+    const utterance = new SpeechSynthesisUtterance(text);
+    speechSynthesis.speak(utterance);
+}
+
+function startNavigation() {
+    const targetLat = parseFloat(document.getElementById("targetLat").value);
+    const targetLon = parseFloat(document.getElementById("targetLon").value);
+
+    if (isNaN(targetLat) || isNaN(targetLon)) {
+        alert("Введите корректные координаты!");
         return;
     }
 
-    // Запрашиваем первую позицию и разрешение
+    if (!navigator.geolocation) {
+        alert("Геолокация не поддерживается вашим устройством");
+        return;
+    }
+
+    // Сразу озвучиваем расстояние
     navigator.geolocation.getCurrentPosition(position => {
-        speakPosition(position);
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+        const distance = getDistance(lat, lon, targetLat, targetLon);
+        speak(`Расстояние до цели ${Math.round(distance)} метров`);
     });
 
-    // Каждые 5 секунд
+    // Каждые 15 секунд
     intervalId = setInterval(() => {
         navigator.geolocation.getCurrentPosition(position => {
-            speakPosition(position);
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            const distance = getDistance(lat, lon, targetLat, targetLon);
+            speak(`Расстояние до цели ${Math.round(distance)} метров`);
         });
     }, 15000);
 }
-
-function speakPosition(position) {
-    const lat = position.coords.latitude.toFixed(5);
-    const lon = position.coords.longitude.toFixed(5);
-    const message = `координаты: ${lat}, долгота ${lon}`;
-
-    const utterance = new SpeechSynthesisUtterance(message);
-    speechSynthesis.speak(utterance);
-}
 </script>
+
+</body>
+</html>
