@@ -2,86 +2,43 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Telegram Web Navigator</title>
-
-  <!-- Telegram Web App SDK -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-  <!-- Leaflet.js для карты -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
+  <title>Геопозиция с озвучкой</title>
   <style>
-    body, html { margin:0; padding:0; height:100%; }
-    #map { width:100%; height:90%; }
-    #controls { padding: 10px; text-align:center; }
-    button { font-size: 16px; padding: 10px 20px; }
+    body { font-family: sans-serif; text-align: center; padding: 50px; }
+    button { font-size: 18px; padding: 10px 20px; cursor: pointer; }
   </style>
 </head>
 <body>
 
-<div id="map"></div>
-<div id="controls">
-  <button onclick="startNavigation()">Начать навигацию</button>
-</div>
+<h1>Озвучивание текущей геопозиции</h1>
+<p>Нажмите кнопку, чтобы озвучить широту и долготу.</p>
+
+<button onclick="speakPosition()">Озвучить позицию</button>
 
 <script>
-Telegram.WebApp.ready(); // Инициализация Telegram Web App
-
-let map, userMarker;
-
-// Инициализация карты
-function initMap(lat=55.751, lon=37.618) {
-    map = L.map('map').setView([lat, lon], 15);
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-
-    userMarker = L.marker([lat, lon]).addTo(map).bindPopup("Вы здесь").openPopup();
-}
-
-// Обновление позиции пользователя
-function updatePosition(lat, lon) {
-    userMarker.setLatLng([lat, lon]);
-    map.setView([lat, lon]);
-}
-
-// Озвучивание команды
-function sayCommand(text) {
-    const utterance = new SpeechSynthesisUtterance(text);
-    speechSynthesis.speak(utterance);
-}
-
-// Функция навигации
-function startNavigation() {
+function speakPosition() {
+    // Проверка поддержки геолокации
     if (navigator.geolocation) {
-        navigator.geolocation.watchPosition(position => {
-            const lat = position.coords.latitude;
-            const lon = position.coords.longitude;
+        navigator.geolocation.getCurrentPosition(
+            position => {
+                const lat = position.coords.latitude.toFixed(5);
+                const lon = position.coords.longitude.toFixed(5);
 
-            updatePosition(lat, lon);
+                const message = `Ваши координаты: широта ${lat}, долгота ${lon}`;
+                console.log(message);
 
-            // Простейший пример команды: каждые 10 метров
-            sayCommand(`Вы находитесь на широте ${lat.toFixed(4)}, долготе ${lon.toFixed(4)}`);
-
-            // Отправляем координаты боту
-            Telegram.WebApp.sendData(JSON.stringify({latitude: lat, longitude: lon}));
-
-        }, error => {
-            alert("Ошибка геопозиции: " + error.message);
-        }, {
-            enableHighAccuracy: true,
-            maximumAge: 1000,
-            timeout: 5000
-        });
+                // Озвучивание через Web Speech API
+                const utterance = new SpeechSynthesisUtterance(message);
+                speechSynthesis.speak(utterance);
+            },
+            error => {
+                alert("Ошибка получения геопозиции: " + error.message);
+            }
+        );
     } else {
         alert("Геолокация не поддерживается вашим устройством");
     }
 }
-
-// Инициализация карты при загрузке
-initMap();
 </script>
 
 </body>
