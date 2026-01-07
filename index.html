@@ -1,45 +1,33 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <title>Геопозиция с озвучкой</title>
-  <style>
-    body { font-family: sans-serif; text-align: center; padding: 50px; }
-    button { font-size: 18px; padding: 10px 20px; cursor: pointer; }
-  </style>
-</head>
-<body>
-
-<h1>Озвучивание текущей геопозиции</h1>
-<p>Нажмите кнопку, чтобы озвучить широту и долготу.</p>
-
-<button onclick="speakPosition()">Озвучить позицию</button>
+<button onclick="startAutoSpeak()">Начать озвучивание</button>
 
 <script>
-function speakPosition() {
-    // Проверка поддержки геолокации
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            position => {
-                const lat = position.coords.latitude.toFixed(5);
-                const lon = position.coords.longitude.toFixed(5);
+let intervalId;
 
-                const message = `Ваши координаты: широта ${lat}, долгота ${lon}`;
-                console.log(message);
-
-                // Озвучивание через Web Speech API
-                const utterance = new SpeechSynthesisUtterance(message);
-                speechSynthesis.speak(utterance);
-            },
-            error => {
-                alert("Ошибка получения геопозиции: " + error.message);
-            }
-        );
-    } else {
-        alert("Геолокация не поддерживается вашим устройством");
+function startAutoSpeak() {
+    if (!navigator.geolocation) {
+        alert("Геолокация не поддерживается браузером");
+        return;
     }
+
+    // Запрашиваем первую позицию и разрешение
+    navigator.geolocation.getCurrentPosition(position => {
+        speakPosition(position);
+    });
+
+    // Каждые 5 секунд
+    intervalId = setInterval(() => {
+        navigator.geolocation.getCurrentPosition(position => {
+            speakPosition(position);
+        });
+    }, 5000);
+}
+
+function speakPosition(position) {
+    const lat = position.coords.latitude.toFixed(5);
+    const lon = position.coords.longitude.toFixed(5);
+    const message = `Ваши координаты: широта ${lat}, долгота ${lon}`;
+
+    const utterance = new SpeechSynthesisUtterance(message);
+    speechSynthesis.speak(utterance);
 }
 </script>
-
-</body>
-</html>
