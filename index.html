@@ -19,13 +19,13 @@ function startAutoSpeak() {
         navigator.geolocation.getCurrentPosition(position => {
             speakPosition(position);
         });
-    }, 10000);
+    }, 15000);
 }
 
 function speakPosition(position) {
     const lat = position.coords.latitude.toFixed(5);
     const lon = position.coords.longitude.toFixed(5);
-    const message = `Ваши координаты: широта ${lat}, долгота ${lon}`;
+    const message = `координаты: ${lat}, долгота ${lon}`;
 
     const utterance = new SpeechSynthesisUtterance(message);
     speechSynthesis.speak(utterance);
