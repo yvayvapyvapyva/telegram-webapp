@@ -132,10 +132,11 @@
     <script>
         let watchId = null;
         let isTracking = false;
-        let currentHeading = null; // Азимут с компаса
-        let yandexMap = null; // Объект Яндекс.Карты
-        let mapPlacemark = null; // Метка на карте
-        const updateInterval = 5000; // 5 секунд
+let currentHeading = null; // Азимут с компаса
+let smoothHeading = null; // Сглаженный азимут
+let yandexMap = null; // Объект Яндекс.Карты
+let mapPlacemark = null; // Метка на карте
+const updateInterval = 5000; // 5 секунд
 
         const statusEl = document.getElementById('status');
         const toggleBtn = document.getElementById('toggleBtn');
@@ -298,20 +299,39 @@
             // alpha - азимут компаса (0-360°)
             // 0° = север, 90° = восток, 180° = юг, 270° = запад
             let heading = null;
-            
+            let needFixAlpha = false;
+
             // Для iOS Safari используем webkitCompassHeading (более точный)
             if (event.webkitCompassHeading !== undefined && 
                 event.webkitCompassHeading !== null && 
                 !isNaN(event.webkitCompassHeading)) {
                 heading = event.webkitCompassHeading;
             } 
-            // Для других устройств используем alpha
+            // Для Android и остальных - используем alpha, но ОБЯЗАТЕЛЬНО 360-alpha для соответствия компасу
             else if (event.alpha !== null && event.alpha !== undefined && !isNaN(event.alpha)) {
-                heading = event.alpha;
+                let ua = navigator.userAgent || '';
+                // Самая надёжная проверка Android
+                if (/android/i.test(ua)) {
+                    // В Android DeviceOrientation alpha увеличивается против часовой
+                    heading = (360 - event.alpha) % 360;
+                } else {
+                    // В остальных — alpha по часовой (стандарт)
+                    heading = event.alpha;
+                }
             }
-            
+
+            // Сглаживание азимута (экспоненциальное):
             if (heading !== null && heading !== undefined) {
-                currentHeading = heading;
+                if (smoothHeading === null) {
+                    smoothHeading = heading;
+                } else {
+                    // Корректно учитываем wrap-around 0..360
+                    let delta = heading - smoothHeading;
+                    if (delta > 180) delta -= 360;
+                    if (delta < -180) delta += 360;
+                    smoothHeading = (smoothHeading + delta * 0.15 + 360) % 360;
+                }
+                currentHeading = smoothHeading;
                 updateHeading();
             }
         }
