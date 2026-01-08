@@ -164,7 +164,7 @@
 
                     // Кастомный layout для стрелки (HTML + SVG)
                     const ArrowLayout = ymaps.templateLayoutFactory.createClass(
-                        '<div id="arrow-container" style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;transform:rotate({{ options.rotation }}deg);">' +
+                        '<div id="arrow-container" style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;">' +
                         '<svg width="30" height="30" viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg">' +
                         '  <circle cx="15" cy="15" r="12" fill="#FF0000" stroke="#FFFFFF" stroke-width="2"/>' +
                         '  <path d="M15 5 L18 12 L15 10 L12 12 Z" fill="#FFFFFF"/>' +
@@ -218,22 +218,18 @@
 
         // Обновление угла поворота иконки метки
         function updatePlacemarkRotation() {
-            if (mapPlacemark && currentHeading !== null && currentHeading !== undefined && !isNaN(currentHeading)) {
-                // Для кастомного layout используем опции и прямой вызов updateRotation, если есть
+            if (
+                mapPlacemark &&
+                currentHeading !== null && currentHeading !== undefined && !isNaN(currentHeading)
+            ) {
                 try {
-                    mapPlacemark.options.set('rotation', currentHeading);
-                    const layout = mapPlacemark.options.get('iconLayout');
-                    if (mapPlacemark && layout && layout.prototype && typeof layout.prototype.updateRotation === 'function') {
-                        const el = mapPlacemark;
-                        if (el && el.options && typeof el.options.get === 'function') {
-                            const opt = el.options.get('iconLayout');
-                            if (opt && typeof opt.updateRotation === 'function') {
-                                opt.updateRotation(currentHeading);
-                            }
-                        }
+                    // Поворачиваем стрелку напрямую через DOM
+                    var arrowEl = document.querySelector('#arrow-container');
+                    if (arrowEl) {
+                        arrowEl.style.transform = `rotate(${currentHeading}deg)`;
                     }
                 } catch (e) {
-                    console.error('Ошибка поворота кастомной иконки:', e);
+                    console.error('Ошибка JS-поворота иконки:', e);
                 }
             }
         }
