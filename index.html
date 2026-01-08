@@ -162,22 +162,47 @@
                         type: 'yandex#satellite' // Спутниковый вид
                     });
 
-                    // Создаем метку со стрелкой, указывающей направление
-                    // Используем SVG стрелку, указывающую вверх (на север)
-                    const arrowSvg = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`
-                        <svg width="30" height="30" viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg">
-                            <circle cx="15" cy="15" r="12" fill="#FF0000" stroke="#FFFFFF" stroke-width="2"/>
-                            <path d="M15 5 L18 12 L15 10 L12 12 Z" fill="#FFFFFF"/>
-                        </svg>
-                    `);
-                    
+                    // Кастомный layout для стрелки (HTML + SVG)
+                    const ArrowLayout = ymaps.templateLayoutFactory.createClass(
+                        '<div id="arrow-container" style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;transform:rotate({{ options.rotation }}deg);">' +
+                        '<svg width="30" height="30" viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg">' +
+                        '  <circle cx="15" cy="15" r="12" fill="#FF0000" stroke="#FFFFFF" stroke-width="2"/>' +
+                        '  <path d="M15 5 L18 12 L15 10 L12 12 Z" fill="#FFFFFF"/>' +
+                        '</svg>' +
+                        '</div>', {
+                        build: function () {
+                            ArrowLayout.superclass.build.call(this);
+                            this._updateRotation();
+                        },
+                        // Для динамического обновления
+                        _updateRotation: function () {
+                            const cont = this.getParentElement();
+                            if (cont) {
+                                cont.style.transform = `rotate(${this.getData().options.get('rotation', 0)}deg)`;
+                            }
+                        },
+                        // Обновляем при изменении опций
+                        onSublayoutSizeChange: function () {
+                            ArrowLayout.superclass.onSublayoutSizeChange.call(this);
+                            this._updateRotation();
+                        },
+                        // Метод публичный для вызова извне
+                        updateRotation: function (deg) {
+                            const cont = this.getParentElement();
+                            if (cont) {
+                                cont.style.transform = `rotate(${deg}deg)`;
+                            }
+                        }
+                    });
+
                     mapPlacemark = new ymaps.Placemark([lat, lon], {
                         balloonContent: 'Ваше местоположение'
                     }, {
-                        iconLayout: 'default#image',
-                        iconImageHref: arrowSvg,
-                        iconImageSize: [30, 30],
-                        iconImageOffset: [-15, -15]
+                        iconLayout: ArrowLayout,
+                        iconShape: {type: 'Circle', coordinates: [0, 0], radius: 17},
+                        rotation: currentHeading || 0,
+                        // размеры и смещение центра
+                        iconOffset: [-17, -17]
                     });
 
                     yandexMap.geoObjects.add(mapPlacemark);
@@ -194,13 +219,21 @@
         // Обновление угла поворота иконки метки
         function updatePlacemarkRotation() {
             if (mapPlacemark && currentHeading !== null && currentHeading !== undefined && !isNaN(currentHeading)) {
-                // В Яндекс.Картах угол поворота задается в градусах по часовой стрелке
-                // Азимут уже в правильном формате (0° = север, по часовой стрелке)
-                // Стрелка изначально указывает вверх (на север), поэтому просто используем азимут
+                // Для кастомного layout используем опции и прямой вызов updateRotation, если есть
                 try {
-                    mapPlacemark.options.set('iconRotation', currentHeading);
+                    mapPlacemark.options.set('rotation', currentHeading);
+                    const layout = mapPlacemark.options.get('iconLayout');
+                    if (mapPlacemark && layout && layout.prototype && typeof layout.prototype.updateRotation === 'function') {
+                        const el = mapPlacemark;
+                        if (el && el.options && typeof el.options.get === 'function') {
+                            const opt = el.options.get('iconLayout');
+                            if (opt && typeof opt.updateRotation === 'function') {
+                                opt.updateRotation(currentHeading);
+                            }
+                        }
+                    }
                 } catch (e) {
-                    console.error('Ошибка поворота иконки:', e);
+                    console.error('Ошибка поворота кастомной иконки:', e);
                 }
             }
         }
