@@ -162,20 +162,47 @@
                         type: 'yandex#satellite' // Спутниковый вид
                     });
 
-                    // Создаем метку
+                    // Создаем метку со стрелкой, указывающей направление
+                    // Используем SVG стрелку, указывающую вверх (на север)
+                    const arrowSvg = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`
+                        <svg width="30" height="30" viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="15" cy="15" r="12" fill="#FF0000" stroke="#FFFFFF" stroke-width="2"/>
+                            <path d="M15 5 L18 12 L15 10 L12 12 Z" fill="#FFFFFF"/>
+                        </svg>
+                    `);
+                    
                     mapPlacemark = new ymaps.Placemark([lat, lon], {
                         balloonContent: 'Ваше местоположение'
                     }, {
-                        preset: 'islands#redDotIcon'
+                        iconLayout: 'default#image',
+                        iconImageHref: arrowSvg,
+                        iconImageSize: [30, 30],
+                        iconImageOffset: [-15, -15]
                     });
 
                     yandexMap.geoObjects.add(mapPlacemark);
                 } else {
-                    // Обновляем позицию карты и метки
-                    yandexMap.setCenter([lat, lon], 15);
+                    // Обновляем только позицию метки, карту не центрируем
                     mapPlacemark.geometry.setCoordinates([lat, lon]);
                 }
+                
+                // Обновляем угол поворота иконки
+                updatePlacemarkRotation();
             });
+        }
+
+        // Обновление угла поворота иконки метки
+        function updatePlacemarkRotation() {
+            if (mapPlacemark && currentHeading !== null && currentHeading !== undefined && !isNaN(currentHeading)) {
+                // В Яндекс.Картах угол поворота задается в градусах по часовой стрелке
+                // Азимут уже в правильном формате (0° = север, по часовой стрелке)
+                // Стрелка изначально указывает вверх (на север), поэтому просто используем азимут
+                try {
+                    mapPlacemark.options.set('iconRotation', currentHeading);
+                } catch (e) {
+                    console.error('Ошибка поворота иконки:', e);
+                }
+            }
         }
 
         function updateStatus(text, className) {
@@ -193,6 +220,8 @@
         function updateHeading() {
             if (currentHeading !== null && currentHeading !== undefined && !isNaN(currentHeading)) {
                 headingEl.textContent = currentHeading.toFixed(1) + '° (' + getDirectionName(currentHeading) + ')';
+                // Обновляем угол поворота иконки на карте
+                updatePlacemarkRotation();
             } else {
                 headingEl.textContent = 'N/A';
             }
