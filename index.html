@@ -2,46 +2,18 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>Навигация</title>
+<title>Навигация с азимутами</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <script src="https://api-maps.yandex.ru/2.1/?apikey=ВАШ_API_КЛЮЧ&lang=ru_RU"></script>
 
 <style>
-html, body {
-    margin: 0;
-    height: 100%;
-}
-#map {
-    height: 100%;
-}
-#start {
-    position: absolute;
-    inset: 0;
-    z-index: 20;
-    background: black;
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-#panel {
-    position: absolute;
-    z-index: 10;
-    top: 10px;
-    left: 10px;
-    right: 10px;
-    background: white;
-}
-textarea {
-    width: 100%;
-    height: 120px;
-    box-sizing: border-box;
-}
-button {
-    width: 100%;
-    margin-top: 5px;
-}
+html, body { margin:0; height:100%; }
+#map { height:100%; }
+#start { position:absolute; inset:0; z-index:20; background:black; color:white; display:flex; align-items:center; justify-content:center; }
+#panel { position:absolute; z-index:10; top:10px; left:10px; right:10px; background:white; }
+textarea { width:100%; height:150px; box-sizing:border-box; }
+button { width:100%; margin-top:5px; }
 </style>
 </head>
 
@@ -51,9 +23,10 @@ button {
 
 <div id="panel">
 <textarea id="input">
-56.339941, 43.933242,1-Выполняем параллельную парковку
-56.340072, 43.933019,2-Выполняем заезд в гараж
-56.340182, 43.932832,3-Выезжаем с парковки направо
+56.339941,43.933242,1-Выполняем параллельную парковку,90
+56.340072,43.933019,2-Выполняем заезд в гараж,180
+56.340182,43.932832,3-Выезжаем с парковки направо,270
+56.340300,43.932500,4-Поворот налево,45
 </textarea>
 <button onclick="showPoints()">Показать точки</button>
 <button id="toggleCenter">Автоцентр: Включено</button>
@@ -67,178 +40,129 @@ let map, placemark;
 let azimuth = 0;
 let points = [];       
 let currentIndex = 0;  
-let autoCenter = true; // автоцентр включен по умолчанию
+let autoCenter = true; 
 
-// ===== кнопка включения/выключения автоцентра =====
 document.getElementById('toggleCenter').onclick = () => {
     autoCenter = !autoCenter;
     document.getElementById('toggleCenter').textContent = 
         `Автоцентр: ${autoCenter ? 'Включено' : 'Выключено'}`;
 };
 
-// ===== запуск (обязательно для iOS) =====
 document.getElementById('start').onclick = async () => {
     document.getElementById('start').remove();
-
     if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
         await DeviceOrientationEvent.requestPermission();
     }
-
     initMap();
     initCompass();
 };
 
-// ===== карта и геолокация =====
 function initMap() {
     ymaps.ready(() => {
-        map = new ymaps.Map("map", {
-            center: [0, 0],
-            zoom: 18,
-            type: 'yandex#satellite',
-            controls: []
-        });
-
-        placemark = new ymaps.Placemark([0, 0], {}, {
+        map = new ymaps.Map("map", { center:[0,0], zoom:18, type:'yandex#satellite', controls:[] });
+        placemark = new ymaps.Placemark([0,0], {}, {
             iconLayout: 'default#image',
-            iconImageHref: arrowSVG(0),
-            iconImageSize: [40, 40],
-            iconImageOffset: [-20, -20]
+            iconImageHref: arrowSVG(0, ''), // стрелка пользователя без номера
+            iconImageSize: [40,40],
+            iconImageOffset: [-20,-20]
         });
-
         map.geoObjects.add(placemark);
 
-        // ===== отключение автоцентра при ручном перемещении карты =====
         map.events.add('boundschange', (e) => {
-            if (!e.get('originalEvent')) return; // событие не от пользователя
+            if (!e.get('originalEvent')) return;
             autoCenter = false;
             document.getElementById('toggleCenter').textContent = `Автоцентр: Выключено`;
         });
 
-        // ===== отслеживание позиции =====
         navigator.geolocation.watchPosition(p => {
             const c = [p.coords.latitude, p.coords.longitude];
             placemark.geometry.setCoordinates(c);
-
-            if (autoCenter) {
-                map.setCenter(c);
-            }
-
+            if (autoCenter) map.setCenter(c);
             checkDistance(c);
-        }, null, { enableHighAccuracy: true });
+        }, null, { enableHighAccuracy:true });
     });
 }
 
-// ===== компас =====
 function initCompass() {
     window.addEventListener('deviceorientation', e => {
-        if (e.webkitCompassHeading !== undefined) {
-            azimuth = Math.round(e.webkitCompassHeading);
-            updateArrow();
-        }
+        if (e.webkitCompassHeading!==undefined){ azimuth=Math.round(e.webkitCompassHeading); updateArrow(); }
     }, true);
-
     window.addEventListener('deviceorientationabsolute', e => {
-        if (!e.absolute || e.alpha === null) return;
-        if (Math.abs(e.beta) > 45) return;
-        azimuth = Math.round(360 - e.alpha);
-        updateArrow();
+        if(!e.absolute || e.alpha===null) return;
+        if(Math.abs(e.beta)>45) return;
+        azimuth = Math.round(360 - e.alpha); updateArrow();
     }, true);
 }
 
-// ===== обновление стрелки =====
 function updateArrow() {
-    placemark.options.set('iconImageHref', arrowSVG(azimuth));
+    placemark.options.set('iconImageHref', arrowSVG(azimuth, '')); // стрелка пользователя
 }
 
-// ===== SVG стрелка =====
-function arrowSVG(a) {
+// ===== SVG генератор стрелки с номером =====
+function arrowSVG(a, num) {
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(`
         <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
             <g transform="rotate(${a},20,20)">
                 <polygon points="20,2 28,30 20,24 12,30" fill="red"/>
             </g>
+            ${num ? `<text x="20" y="36" font-size="12" text-anchor="middle" fill="black" font-family="Arial">${num}</text>` : ''}
         </svg>
     `);
 }
 
-// ===== точки маршрута =====
+// ===== точки маршрута с азимутом и номером =====
 function showPoints() {
-    const lines = document.getElementById('input').value
-        .split('\n')
-        .filter(l => l.trim());
-
-    points = [];        // очистка массива точек
-    currentIndex = 0;   // начинаем с первой точки
+    const lines = document.getElementById('input').value.split('\n').filter(l=>l.trim());
+    points = []; currentIndex=0;
 
     lines.forEach(line => {
+        // формат: lat,lon,num-команда,azimuth
         const [lat, lon, rest] = line.split(',');
-        const [num, text] = rest.split('-');
+        const [numText, azStr] = rest.split(',');
+        const [num, text] = numText.split('-');
+        const az = parseFloat(azStr) || 0;
 
         const pm = new ymaps.Placemark(
             [parseFloat(lat), parseFloat(lon)],
             { balloonContent: text },
             {
                 iconLayout: 'default#image',
-                iconImageHref: numberSVG(num),
-                iconImageSize: [36, 36],
-                iconImageOffset: [-18, -18]
+                iconImageHref: arrowSVG(az, num), // стрелка с собственным азимутом и номером
+                iconImageSize: [40,40],
+                iconImageOffset: [-20,-20]
             }
         );
 
         map.geoObjects.add(pm);
-        points.push({coords: [parseFloat(lat), parseFloat(lon)], text});
+        points.push({ coords:[parseFloat(lat),parseFloat(lon)], text, az });
     });
 
-    // центрируем карту на первой точке
-    if (points.length && autoCenter) {
-        map.setCenter(points[0].coords);
-    }
+    if(points.length && autoCenter) map.setCenter(points[0].coords);
 }
 
-// ===== SVG генератор номера =====
-function numberSVG(n) {
-    return 'data:image/svg+xml;utf8,' + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36">
-            <circle cx="18" cy="18" r="16" fill="white" stroke="black" stroke-width="2"/>
-            <text x="18" y="23"
-                  font-size="14"
-                  text-anchor="middle"
-                  font-family="Arial"
-                  fill="black">${n}</text>
-        </svg>
-    `);
-}
-
-// ===== проверка расстояния до текущей точки =====
+// ===== проверка расстояния =====
 function checkDistance(currentCoords) {
-    if (!points.length || currentIndex >= points.length) return;
-
+    if(!points.length || currentIndex>=points.length) return;
     const target = points[currentIndex].coords;
-    const distance = getDistance(currentCoords[0], currentCoords[1], target[0], target[1]);
-
-    // обновляем текст с расстоянием
+    const distance = getDistance(currentCoords[0],currentCoords[1],target[0],target[1]);
     document.getElementById('distance').textContent = `Расстояние: ${Math.round(distance)} м`;
-
-    if (distance <= 20) {
+    if(distance <= 20){
         speechSynthesis.speak(new SpeechSynthesisUtterance(points[currentIndex].text));
         currentIndex++;
     }
 }
 
-// ===== вычисление расстояния в метрах =====
-function getDistance(lat1, lon1, lat2, lon2) {
+function getDistance(lat1, lon1, lat2, lon2){
     const R = 6371000;
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
+    const dLat = toRad(lat2-lat1);
+    const dLon = toRad(lon2-lon1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+    const c = 2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+    return R*c;
 }
 
-function toRad(deg) {
-    return deg * Math.PI / 180;
-}
+function toRad(deg){ return deg*Math.PI/180; }
+
 </script>
-
 </body>
 </html>
