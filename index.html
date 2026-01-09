@@ -8,49 +8,44 @@
 <script src="https://api-maps.yandex.ru/2.1/?apikey=ВАШ_API_КЛЮЧ&lang=ru_RU"></script>
 
 <style>
-html, body { margin:0; height:100%; font-family:Arial; }
-#map { width:100%; height:100%; }
+html,body{margin:0;height:100%;font-family:Arial}
+#map{width:100%;height:100%}
 
-#start {
-    position:absolute; inset:0; z-index:20;
-    background:black; color:white;
-    display:flex; align-items:center; justify-content:center;
-    font-size:20px; cursor:pointer;
+#start{
+    position:absolute;inset:0;z-index:20;
+    background:black;color:white;
+    display:flex;align-items:center;justify-content:center;
+    font-size:20px;cursor:pointer
 }
 
-#togglePanelBtn {
-    position:absolute; top:10px; left:10px; z-index:16;
-    width:36px; height:36px;
-    background:white; border:none; border-radius:6px;
+#togglePanelBtn{
+    position:absolute;top:10px;left:10px;z-index:16;
+    width:36px;height:36px;
+    background:white;border:none;border-radius:6px;font-size:20px
 }
 
-#panel {
-    position:absolute; top:50px; left:10px; z-index:15;
-    width:280px; max-height:80%;
-    background:rgba(255,255,255,0.95);
-    padding:6px; border-radius:6px;
-    display:none; overflow:auto;
+#panel{
+    position:absolute;top:50px;left:10px;z-index:15;
+    width:300px;max-height:75%;
+    background:rgba(255,255,255,.95);
+    padding:6px;border-radius:6px;
+    display:none;overflow:auto
 }
 
-#panel textarea { width:100%; height:180px; }
-#panel button, #panel input { width:100%; margin-top:5px; }
+#panel textarea{width:100%;height:220px}
+#panel button,#panel input{width:100%;margin-top:5px}
 
-#targets div {
-    padding:6px;
-    border-bottom:1px solid #ddd;
-    cursor:pointer;
+#targets div{
+    padding:6px;border-bottom:1px solid #ddd;cursor:pointer
 }
-#targets div.active {
-    background:#c8f7c5;
-    font-weight:bold;
+#targets div.active{
+    background:#c8f7c5;font-weight:bold
 }
 
-#info {
-    position:absolute; bottom:0; left:0; width:100%;
-    background:rgba(255,255,255,0.95);
-    padding:8px;
-    font-weight:bold;
-    z-index:15;
+#info{
+    position:absolute;bottom:0;left:0;width:100%;
+    background:rgba(255,255,255,.95);
+    padding:8px;font-weight:bold;z-index:15
 }
 </style>
 </head>
@@ -72,7 +67,6 @@ html, body { margin:0; height:100%; font-family:Arial; }
 <input id="distanceTrigger" type="number" value="20">
 
 <button id="toggleAutoCenter">Автоцентр: Вкл</button>
-
 <hr>
 <div id="targets"></div>
 </div>
@@ -81,8 +75,9 @@ html, body { margin:0; height:100%; font-family:Arial; }
 <div id="map"></div>
 
 <script>
-let map, placemark;
-let points=[], azimuth=0, autoCenter=true, speechAllowed=false;
+let map, userPlacemark;
+let points=[], azimuth=0;
+let autoCenter=true, speechAllowed=false;
 
 /* START */
 start.onclick=async()=>{
@@ -94,8 +89,9 @@ start.onclick=async()=>{
     initMap(); initCompass();
 };
 
-togglePanelBtn.onclick=()=>panel.style.display=
-    panel.style.display==='block'?'none':'block';
+togglePanelBtn.onclick=()=>{
+    panel.style.display=panel.style.display==='block'?'none':'block';
+};
 
 toggleAutoCenter.onclick=()=>{
     autoCenter=!autoCenter;
@@ -105,32 +101,52 @@ toggleAutoCenter.onclick=()=>{
 /* MAP */
 function initMap(){
     ymaps.ready(()=>{
-        map=new ymaps.Map("map",{center:[0,0],zoom:18,type:'yandex#satellite',controls:[]});
-        placemark=new ymaps.Placemark([0,0],{},{
+        map=new ymaps.Map("map",{
+            center:[0,0],zoom:18,type:'yandex#satellite',controls:[]
+        });
+
+        userPlacemark=new ymaps.Placemark([0,0],{},{
             iconLayout:'default#image',
             iconImageHref:arrowSVG(0,'red'),
             iconImageSize:[40,40],
             iconImageOffset:[-20,-20]
         });
-        map.geoObjects.add(placemark);
+
+        map.geoObjects.add(userPlacemark);
 
         navigator.geolocation.watchPosition(p=>{
             const c=[p.coords.latitude,p.coords.longitude];
-            placemark.geometry.setCoordinates(c);
+            userPlacemark.geometry.setCoordinates(c);
             if(autoCenter) map.setCenter(c);
             checkDistance(c);
         },null,{enableHighAccuracy:true});
     });
 }
 
-/* COMPASS */
+/* COMPASS — FIXED */
 function initCompass(){
+    // iOS
     window.addEventListener('deviceorientation',e=>{
         if(e.webkitCompassHeading!==undefined){
             azimuth=Math.round(e.webkitCompassHeading);
-            placemark.options.set('iconImageHref',arrowSVG(azimuth,'red'));
+            updateUserArrow();
         }
     },true);
+
+    // Android
+    window.addEventListener('deviceorientationabsolute',e=>{
+        if(!e.absolute||e.alpha===null) return;
+        azimuth=Math.round((360-e.alpha)%360);
+        updateUserArrow();
+    },true);
+}
+
+function updateUserArrow(){
+    if(!userPlacemark) return;
+    userPlacemark.options.set(
+        'iconImageHref',
+        arrowSVG(azimuth,'red')
+    );
 }
 
 /* SVG */
@@ -144,7 +160,7 @@ ${num?`<text x="20" y="30" font-size="14" text-anchor="middle" fill="white">${nu
 </svg>`);
 }
 
-/* BUILD ROUTE */
+/* ROUTE */
 function showPoints(){
     clearRoute();
     points=[];
@@ -152,7 +168,7 @@ function showPoints(){
         const [lat,lon,rest]=l.split(',');
         const [az,text]=rest.split('-');
         points.push({
-            id: i+1,
+            id:i+1,
             coords:[+lat,+lon],
             azimuth:+az,
             text,
@@ -162,20 +178,18 @@ function showPoints(){
     rebuildRoute();
 }
 
-/* REBUILD */
 function rebuildRoute(){
     clearRoute();
     targets.innerHTML='';
 
     points.forEach((p,i)=>{
-        const pm=new ymaps.Placemark(p.coords,{},{
+        p.placemark=new ymaps.Placemark(p.coords,{},{
             iconLayout:'default#image',
             iconImageHref:arrowSVG(p.azimuth,i===0?'green':'blue',p.id),
             iconImageSize:[36,36],
             iconImageOffset:[-18,-18]
         });
-        p.placemark=pm;
-        map.geoObjects.add(pm);
+        map.geoObjects.add(p.placemark);
 
         const div=document.createElement('div');
         div.textContent=`${p.id}. ${p.text}`;
@@ -185,13 +199,11 @@ function rebuildRoute(){
     });
 }
 
-/* SELECT */
-function selectAsFirst(index){
-    for(let i=0;i<index;i++){
-        if(points[i].placemark)
-            map.geoObjects.remove(points[i].placemark);
-    }
-    points = points.slice(index);
+function selectAsFirst(i){
+    for(let j=0;j<i;j++)
+        if(points[j].placemark)
+            map.geoObjects.remove(points[j].placemark);
+    points=points.slice(i);
     rebuildRoute();
 }
 
@@ -200,11 +212,11 @@ function checkDistance(pos){
     if(!points.length) return;
     const p=points[0];
     const dist=getDistance(pos[0],pos[1],p.coords[0],p.coords[1]);
+    const diff=Math.abs(((azimuth-p.azimuth+540)%360)-180);
 
     info.textContent=
         `№${p.id} | ${p.text} | ${Math.round(dist)}м | Аз:${azimuth}° | Ц:${p.azimuth}°`;
 
-    const diff=Math.abs(((azimuth-p.azimuth+540)%360)-180);
     if(dist<=(+distanceTrigger.value||20)&&diff<=45){
         speechSynthesis.speak(new SpeechSynthesisUtterance(p.text));
         map.geoObjects.remove(p.placemark);
@@ -217,7 +229,7 @@ function checkDistance(pos){
 function clearRoute(){
     if(!map) return;
     map.geoObjects.each(o=>{
-        if(o!==placemark) map.geoObjects.remove(o);
+        if(o!==userPlacemark) map.geoObjects.remove(o);
     });
 }
 
