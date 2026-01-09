@@ -55,6 +55,7 @@ button {
 56.340182, 43.932832,3-Выезжаем с парковки направо
 </textarea>
 <button onclick="showPoints()">Показать точки</button>
+<button id="toggleCenter">Автоцентр: Включено</button>
 <div id="distance" style="margin-top:5px; font-weight:bold;">Расстояние: 0 м</div>
 </div>
 
@@ -65,6 +66,14 @@ let map, placemark;
 let azimuth = 0;
 let points = [];       // массив точек маршрута
 let currentIndex = 0;  // текущая точка маршрута
+let autoCenter = true; // флаг автоматического центрирования
+
+// ===== кнопка включения/выключения автоцентра =====
+document.getElementById('toggleCenter').onclick = () => {
+    autoCenter = !autoCenter;
+    document.getElementById('toggleCenter').textContent = 
+        `Автоцентр: ${autoCenter ? 'Включено' : 'Выключено'}`;
+};
 
 // ===== запуск (обязательно для iOS) =====
 document.getElementById('start').onclick = async () => {
