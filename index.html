@@ -10,19 +10,16 @@ html, body { margin:0; height:100%; font-family:Arial, sans-serif; }
 #map { height:100%; width:100%; }
 #start { position:absolute; inset:0; z-index:20; background:black; color:white;
     display:flex; align-items:center; justify-content:center; font-size:20px; cursor:pointer;}
-#panel { position:absolute; z-index:10; top:10px; right:10px; width:250px; background:white; padding:5px;
-    box-shadow:0 0 5px rgba(0,0,0,0.5); transition:right 0.3s;}
-#panel.collapsed { right:-240px; }
+#panel { position:absolute; top:10px; left:10px; width:260px; max-height:90%; background:rgba(255,255,255,0.9); padding:5px;
+    box-shadow:0 0 5px rgba(0,0,0,0.5); overflow:auto; display:none; z-index:15; border-radius:5px;}
 #panel textarea { width:100%; height:200px; box-sizing:border-box; }
 #panel button, #panel input { width:100%; margin-top:5px; box-sizing:border-box; }
-#togglePanel { position:absolute; top:10px; right:10px; z-index:15; width:30px; height:30px; font-size:16px; cursor:pointer; background:white; border:none; box-shadow:0 0 3px rgba(0,0,0,0.5); }
+#info { position:absolute; top:10px; right:10px; z-index:15; background:rgba(255,255,255,0.8); padding:5px; border-radius:5px; font-weight:bold; }
 </style>
 </head>
 <body>
 
 <div id="start">Нажмите для запуска</div>
-
-<button id="togglePanel">&#9776;</button> <!-- кнопка панели -->
 
 <div id="panel">
 <textarea id="input">
@@ -33,13 +30,27 @@ html, body { margin:0; height:100%; font-family:Arial, sans-serif; }
 <button onclick="showPoints()">Обновить точки</button>
 <label>Расстояние срабатывания (м):</label>
 <input id="distanceTrigger" type="number" value="20" min="1" step="1">
-<div id="distance" style="margin-top:5px; font-weight:bold;">Расстояние: 0 м | Азимут: 0°</div>
 </div>
 
+<div id="info">Расстояние: 0 м | Азимут: 0°</div>
 <div id="map"></div>
 
 <script>
 let map, placemark, points=[], currentIndex=0, autoCenter=true, azimuth=0, speechAllowed=false;
+let wakeLock = null;
+
+// ===== Wake Lock =====
+async function requestWakeLock() {
+    try {
+        if('wakeLock' in navigator){
+            wakeLock = await navigator.wakeLock.request('screen');
+            wakeLock.addEventListener('release',()=>console.log('Wake Lock released'));
+        }
+    } catch(err){ console.error('Wake Lock failed:',err); }
+}
+document.addEventListener('visibilitychange', async()=>{
+    if(wakeLock && document.visibilityState==='visible') await requestWakeLock();
+});
 
 // ===== старт =====
 document.getElementById('start').onclick = async () => {
@@ -47,15 +58,18 @@ document.getElementById('start').onclick = async () => {
     speechAllowed = true;
     if('speechSynthesis' in window) speechSynthesis.speak(new SpeechSynthesisUtterance(''));
     if(typeof DeviceOrientationEvent?.requestPermission==='function') await DeviceOrientationEvent.requestPermission();
+    await requestWakeLock();
     initMap();
     initCompass();
+    document.getElementById('panel').style.display='block';
 };
 
-// ===== переключение панели =====
-document.getElementById('togglePanel').onclick = () => {
-    const panel = document.getElementById('panel');
-    panel.classList.toggle('collapsed');
-};
+// ===== панель по тапу =====
+document.getElementById('panel').addEventListener('click', e=>e.stopPropagation());
+document.getElementById('map').addEventListener('click', ()=> {
+    const panel=document.getElementById('panel');
+    panel.style.display = panel.style.display==='none'?'block':'none';
+});
 
 // ===== карта =====
 function initMap(){
@@ -107,29 +121,21 @@ function showPoints(){
     if(points.length && autoCenter) map.setCenter(points[0].coords);
 }
 
+// ===== проверка расстояния и азимута =====
 function checkDistance(currentCoords){
     if(!points.length || currentIndex>=points.length) return;
-
     const triggerDistance = parseFloat(document.getElementById('distanceTrigger').value) || 20;
     const target = points[currentIndex].coords;
-    const distance = getDistance(currentCoords[0], currentCoords[1], target[0], target[1]);
+    const distance = getDistance(currentCoords[0],currentCoords[1],target[0],target[1]);
+    document.getElementById('info').textContent = `Расстояние: ${Math.round(distance)} м | Азимут: ${Math.round(azimuth)}°`;
 
-    // обновляем отображение расстояния и текущего азимута
-    document.getElementById('distance').textContent =
-        `Расстояние: ${Math.round(distance)} м | Азимут: ${Math.round(azimuth)}°`;
-
-    // проверка азимута с допустимым отклонением ±45°
-    const targetAzimuth = points[currentIndex].azimuth;
-    const minAz = (targetAzimuth - 45 + 360) % 360;
-    const maxAz = (targetAzimuth + 45) % 360;
-
+    // проверка азимута ±45°
+    const targetAz = points[currentIndex].azimuth;
+    const minAz = (targetAz - 45 + 360) % 360;
+    const maxAz = (targetAz + 45) % 360;
     let azMatch = false;
-    if(minAz < maxAz){
-        azMatch = azimuth >= minAz && azimuth <= maxAz;
-    } else {
-        // диапазон пересекает 0°
-        azMatch = azimuth >= minAz || azimuth <= maxAz;
-    }
+    if(minAz < maxAz) azMatch = azimuth >= minAz && azimuth <= maxAz;
+    else azMatch = azimuth >= minAz || azimuth <= maxAz;
 
     if(distance <= triggerDistance && azMatch && speechAllowed){
         const utter = new SpeechSynthesisUtterance(points[currentIndex].text);
@@ -138,13 +144,11 @@ function checkDistance(currentCoords){
     }
 }
 
-
-
 // ===== расстояние =====
 function getDistance(lat1,lon1,lat2,lon2){
     const R=6371000, dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
-    const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
-    return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+    const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+    return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 function toRad(deg){ return deg*Math.PI/180; }
 </script>
