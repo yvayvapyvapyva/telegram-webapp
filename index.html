@@ -77,10 +77,22 @@ function initMap() {
 
 function initCompass() {
     window.addEventListener('deviceorientation', e => {
-        if (e.alpha !== null) {
-            azimuth = Math.round(360 - e.alpha);
-            placemark.options.set('iconImageHref', arrowSVG(azimuth));
+
+        // iOS — реальный азимут
+        if (e.webkitCompassHeading !== undefined) {
+            azimuth = Math.round(e.webkitCompassHeading);
         }
+
+        // Android
+        else if (e.alpha !== null) {
+            azimuth = Math.round(360 - e.alpha);
+        }
+
+        placemark.options.set(
+            'iconImageHref',
+            arrowSVG(azimuth)
+        );
+
     }, true);
 }
 
