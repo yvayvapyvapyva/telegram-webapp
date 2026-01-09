@@ -32,7 +32,7 @@ html,body{margin:0;height:100%;font-family:Arial}
     display:none;overflow:auto
 }
 
-#panel textarea{width:100%;height:220px}
+#panel textarea{width:100%;height:180px}
 #panel button,#panel input{width:100%;margin-top:5px}
 
 #targets div{
@@ -55,18 +55,23 @@ html,body{margin:0;height:100%;font-family:Arial}
 <button id="togglePanelBtn">☰</button>
 
 <div id="panel">
+
+<button onclick="document.getElementById('jsonFile').click()">Загрузить JSON</button>
+<input id="jsonFile" type="file" accept=".json" style="display:none">
+
+<button onclick="showPointsFromTextarea()">Построить из текста</button>
+
 <textarea id="input">
 56.339941,43.933242,0-Параллельная парковка
 56.340072,43.933019,90-Заезд в гараж
 56.340182,43.932832,180-Выезд направо
 </textarea>
 
-<button onclick="showPoints()">Построить маршрут</button>
-
 <label>Дистанция (м)</label>
 <input id="distanceTrigger" type="number" value="20">
 
 <button id="toggleAutoCenter">Автоцентр: Вкл</button>
+
 <hr>
 <div id="targets"></div>
 </div>
@@ -101,17 +106,13 @@ toggleAutoCenter.onclick=()=>{
 /* MAP */
 function initMap(){
     ymaps.ready(()=>{
-        map=new ymaps.Map("map",{
-            center:[0,0],zoom:18,type:'yandex#satellite',controls:[]
-        });
-
+        map=new ymaps.Map("map",{center:[0,0],zoom:18,type:'yandex#satellite',controls:[]});
         userPlacemark=new ymaps.Placemark([0,0],{},{
             iconLayout:'default#image',
             iconImageHref:arrowSVG(0,'red'),
             iconImageSize:[40,40],
             iconImageOffset:[-20,-20]
         });
-
         map.geoObjects.add(userPlacemark);
 
         navigator.geolocation.watchPosition(p=>{
@@ -123,9 +124,8 @@ function initMap(){
     });
 }
 
-/* COMPASS — FIXED */
+/* COMPASS */
 function initCompass(){
-    // iOS
     window.addEventListener('deviceorientation',e=>{
         if(e.webkitCompassHeading!==undefined){
             azimuth=Math.round(e.webkitCompassHeading);
@@ -133,7 +133,6 @@ function initCompass(){
         }
     },true);
 
-    // Android
     window.addEventListener('deviceorientationabsolute',e=>{
         if(!e.absolute||e.alpha===null) return;
         azimuth=Math.round((360-e.alpha)%360);
@@ -142,11 +141,8 @@ function initCompass(){
 }
 
 function updateUserArrow(){
-    if(!userPlacemark) return;
-    userPlacemark.options.set(
-        'iconImageHref',
-        arrowSVG(azimuth,'red')
-    );
+    if(userPlacemark)
+        userPlacemark.options.set('iconImageHref',arrowSVG(azimuth,'red'));
 }
 
 /* SVG */
@@ -160,28 +156,40 @@ ${num?`<text x="20" y="30" font-size="14" text-anchor="middle" fill="white">${nu
 </svg>`);
 }
 
-/* ROUTE */
-function showPoints(){
+/* FROM TEXT */
+function showPointsFromTextarea(){
     clearRoute();
     points=[];
     input.value.split('\n').filter(l=>l.trim()).forEach((l,i)=>{
         const [lat,lon,rest]=l.split(',');
         const [az,text]=rest.split('-');
-        points.push({
-            id:i+1,
-            coords:[+lat,+lon],
-            azimuth:+az,
-            text,
-            placemark:null
-        });
+        points.push({id:i+1,coords:[+lat,+lon],azimuth:+az,text});
     });
     rebuildRoute();
 }
 
+/* FROM JSON */
+jsonFile.onchange=e=>{
+    const file=e.target.files[0];
+    if(!file) return;
+    const reader=new FileReader();
+    reader.onload=()=>{
+        clearRoute();
+        points=JSON.parse(reader.result).map(p=>({
+            id:p.id,
+            coords:[p.lat,p.lon],
+            azimuth:p.azimuth,
+            text:p.text
+        }));
+        rebuildRoute();
+    };
+    reader.readAsText(file);
+};
+
+/* ROUTE */
 function rebuildRoute(){
     clearRoute();
     targets.innerHTML='';
-
     points.forEach((p,i)=>{
         p.placemark=new ymaps.Placemark(p.coords,{},{
             iconLayout:'default#image',
