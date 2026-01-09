@@ -77,31 +77,28 @@ function initMap() {
 
 function initCompass() {
 
-    // Android — абсолютный азимут
+    // iOS — всегда реальный компас
+    window.addEventListener('deviceorientation', e => {
+        if (e.webkitCompassHeading !== undefined) {
+            azimuth = Math.round(e.webkitCompassHeading);
+            updateArrow();
+        }
+    }, true);
+
+    // Android — ТОЛЬКО абсолютный компас
     window.addEventListener('deviceorientationabsolute', e => {
         if (e.absolute && e.alpha !== null) {
             azimuth = Math.round(360 - e.alpha);
             updateArrow();
         }
     }, true);
+}
 
-    // iOS + fallback
-    window.addEventListener('deviceorientation', e => {
-
-        // iOS — реальный компас
-        if (e.webkitCompassHeading !== undefined) {
-            azimuth = Math.round(e.webkitCompassHeading);
-            updateArrow();
-            return;
-        }
-
-        // Android fallback
-        if (!e.absolute && e.alpha !== null) {
-            azimuth = Math.round(360 - e.alpha);
-            updateArrow();
-        }
-
-    }, true);
+function updateArrow() {
+    placemark.options.set(
+        'iconImageHref',
+        arrowSVG(azimuth)
+    );
 }
 
 function updateArrow() {
