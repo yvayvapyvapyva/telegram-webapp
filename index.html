@@ -14,8 +14,8 @@ html, body { margin:0; height:100%; font-family:Arial, sans-serif; }
     box-shadow:0 0 5px rgba(0,0,0,0.5); overflow:auto; display:none; z-index:15; border-radius:5px;}
 #panel textarea { width:100%; height:200px; box-sizing:border-box; }
 #panel button, #panel input { width:100%; margin-top:5px; box-sizing:border-box; }
-#togglePanelBtn { position:absolute; top:5px; left:5px; z-index:16; width:35px; height:35px; font-size:20px; cursor:pointer; background:white; border:none; border-radius:5px; box-shadow:0 0 3px rgba(0,0,0,0.5); }
-#info { position:absolute; top:10px; right:10px; z-index:15; background:rgba(255,255,255,0.8); padding:5px; border-radius:5px; font-weight:bold; max-width:250px; }
+#togglePanelBtn { position:absolute; top:10px; left:5px; z-index:16; width:35px; height:35px; font-size:20px; cursor:pointer; background:white; border:none; border-radius:5px; box-shadow:0 0 3px rgba(0,0,0,0.5); }
+#info { position:absolute; bottom:0; left:0; width:100%; z-index:15; background:rgba(255,255,255,0.9); padding:8px; font-weight:bold; box-sizing:border-box; }
 </style>
 </head>
 <body>
@@ -33,10 +33,10 @@ html, body { margin:0; height:100%; font-family:Arial, sans-serif; }
 <button onclick="showPoints()">Обновить точки</button>
 <label>Расстояние срабатывания (м):</label>
 <input id="distanceTrigger" type="number" value="20" min="1" step="1">
+<button id="toggleAutoCenter">Автоцентр: Вкл</button>
 </div>
 
 <div id="info">№: - | Команда: - | Расстояние: 0 м | Азимут: 0° | Цель: 0°</div>
-
 <div id="map"></div>
 
 <script>
@@ -72,6 +72,12 @@ document.getElementById('start').onclick = async () => {
 document.getElementById('togglePanelBtn').onclick = () => {
     const panel = document.getElementById('panel');
     panel.style.display = (panel.style.display === 'none') ? 'block' : 'none';
+};
+
+// ===== кнопка автоцентра =====
+document.getElementById('toggleAutoCenter').onclick = () => {
+    autoCenter = !autoCenter;
+    document.getElementById('toggleAutoCenter').textContent = `Автоцентр: ${autoCenter ? 'Вкл' : 'Выкл'}`;
 };
 
 // ===== карта =====
@@ -139,7 +145,7 @@ function checkDistance(currentCoords){
     if(minAz < maxAz) azMatch = azimuth >= minAz && azimuth <= maxAz;
     else azMatch = azimuth >= minAz || azimuth <= maxAz;
 
-    // обновляем инфо панель с номером, командой, расстоянием, текущим азимутом и азимутом цели
+    // обновляем инфо-панель с номером, командой, расстоянием, текущим и целевым азимутом
     const currentPoint = points[currentIndex];
     document.getElementById('info').textContent =
         `№: ${currentIndex+1} | Команда: ${currentPoint.text} | Расстояние: ${Math.round(distance)} м | Азимут: ${Math.round(azimuth)}° | Цель: ${currentPoint.azimuth}°`;
@@ -150,7 +156,6 @@ function checkDistance(currentCoords){
         currentIndex++;
     }
 }
-
 
 // ===== расстояние =====
 function getDistance(lat1,lon1,lat2,lon2){
