@@ -2,27 +2,44 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>Compass Map</title>
+<title>Навигация</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <script src="https://api-maps.yandex.ru/2.1/?apikey=ВАШ_API_КЛЮЧ&lang=ru_RU"></script>
 
 <style>
-html, body, #map {
+html, body {
     margin: 0;
-    width: 100%;
+    height: 100%;
+}
+#map {
     height: 100%;
 }
 #start {
     position: absolute;
-    z-index: 10;
     inset: 0;
+    z-index: 20;
+    background: black;
+    color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: black;
-    color: white;
-    font-size: 18px;
+}
+#panel {
+    position: absolute;
+    z-index: 10;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    background: white;
+}
+textarea {
+    width: 100%;
+    height: 120px;
+    box-sizing: border-box;
+}
+button {
+    width: 100%;
 }
 </style>
 </head>
@@ -30,17 +47,27 @@ html, body, #map {
 <body>
 
 <div id="start">Нажмите для запуска</div>
+
+<div id="panel">
+<textarea id="input">
+56.339941, 43.933242,1-Выполняем параллельную парковку
+56.340072, 43.933019,2-Выполняем заезд в гараж
+56.340182, 43.932832,3-Выезжаем с парковки направо
+</textarea>
+<button onclick="showPoints()">Показать точки</button>
+</div>
+
 <div id="map"></div>
 
 <script>
 let map, placemark;
 let azimuth = 0;
 
-// кнопка запуска (обязательно для iOS)
+// ===== запуск (обязательно для iOS) =====
 document.getElementById('start').onclick = async () => {
     document.getElementById('start').remove();
 
-    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+    if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
         await DeviceOrientationEvent.requestPermission();
     }
 
@@ -49,6 +76,7 @@ document.getElementById('start').onclick = async () => {
     initVoice();
 };
 
+// ===== карта и геолокация =====
 function initMap() {
     ymaps.ready(() => {
         map = new ymaps.Map("map", {
@@ -75,9 +103,10 @@ function initMap() {
     });
 }
 
+// ===== компас =====
 function initCompass() {
 
-    // iOS — всегда реальный компас
+    // iOS — абсолютный азимут
     window.addEventListener('deviceorientation', e => {
         if (e.webkitCompassHeading !== undefined) {
             azimuth = Math.round(e.webkitCompassHeading);
@@ -85,15 +114,17 @@ function initCompass() {
         }
     }, true);
 
-    // Android — ТОЛЬКО абсолютный компас
+    // Android — ТОЛЬКО абсолютный и только при горизонтальном положении
     window.addEventListener('deviceorientationabsolute', e => {
-        if (e.absolute && e.alpha !== null) {
-            azimuth = Math.round(360 - e.alpha);
-            updateArrow();
-        }
+        if (!e.absolute || e.alpha === null) return;
+        if (Math.abs(e.beta) > 45) return; // защита от вертикали
+
+        azimuth = Math.round(360 - e.alpha);
+        updateArrow();
     }, true);
 }
 
+// ===== обновление стрелки =====
 function updateArrow() {
     placemark.options.set(
         'iconImageHref',
@@ -101,13 +132,7 @@ function updateArrow() {
     );
 }
 
-function updateArrow() {
-    placemark.options.set(
-        'iconImageHref',
-        arrowSVG(azimuth)
-    );
-}
-
+// ===== голос =====
 function initVoice() {
     setInterval(() => {
         speechSynthesis.speak(
@@ -116,6 +141,7 @@ function initVoice() {
     }, 10000);
 }
 
+// ===== SVG стрелка =====
 function arrowSVG(a) {
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(`
         <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
@@ -124,6 +150,29 @@ function arrowSVG(a) {
             </g>
         </svg>
     `);
+}
+
+// ===== точки маршрута =====
+function showPoints() {
+    const lines = document.getElementById('input').value
+        .split('\n')
+        .filter(l => l.trim());
+
+    lines.forEach(line => {
+        const [lat, lon, rest] = line.split(',');
+        const [num, text] = rest.split('-');
+
+        const pm = new ymaps.Placemark(
+            [parseFloat(lat), parseFloat(lon)],
+            { balloonContent: text },
+            {
+                preset: 'islands#redCircleIcon',
+                iconContent: num
+            }
+        );
+
+        map.geoObjects.add(pm);
+    });
 }
 </script>
 
