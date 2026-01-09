@@ -40,6 +40,7 @@ textarea {
 }
 button {
     width: 100%;
+    margin-top: 5px;
 }
 </style>
 </head>
@@ -64,9 +65,9 @@ button {
 <script>
 let map, placemark;
 let azimuth = 0;
-let points = [];       // массив точек маршрута
-let currentIndex = 0;  // текущая точка маршрута
-let autoCenter = true; // флаг автоматического центрирования
+let points = [];       
+let currentIndex = 0;  
+let autoCenter = true; // автоцентр включен по умолчанию
 
 // ===== кнопка включения/выключения автоцентра =====
 document.getElementById('toggleCenter').onclick = () => {
@@ -106,12 +107,22 @@ function initMap() {
 
         map.geoObjects.add(placemark);
 
+        // ===== отключение автоцентра при ручном перемещении карты =====
+        map.events.add('boundschange', (e) => {
+            if (!e.get('originalEvent')) return; // событие не от пользователя
+            autoCenter = false;
+            document.getElementById('toggleCenter').textContent = `Автоцентр: Выключено`;
+        });
+
+        // ===== отслеживание позиции =====
         navigator.geolocation.watchPosition(p => {
             const c = [p.coords.latitude, p.coords.longitude];
             placemark.geometry.setCoordinates(c);
-            map.setCenter(c);
 
-            // проверка приближения к текущей точке
+            if (autoCenter) {
+                map.setCenter(c);
+            }
+
             checkDistance(c);
         }, null, { enableHighAccuracy: true });
     });
@@ -175,8 +186,13 @@ function showPoints() {
         );
 
         map.geoObjects.add(pm);
-        points.push({coords: [parseFloat(lat), parseFloat(lon)], text}); // добавляем точку в массив
+        points.push({coords: [parseFloat(lat), parseFloat(lon)], text});
     });
+
+    // центрируем карту на первой точке
+    if (points.length && autoCenter) {
+        map.setCenter(points[0].coords);
+    }
 }
 
 // ===== SVG генератор номера =====
@@ -204,15 +220,14 @@ function checkDistance(currentCoords) {
     document.getElementById('distance').textContent = `Расстояние: ${Math.round(distance)} м`;
 
     if (distance <= 20) {
-        // озвучивание команды
         speechSynthesis.speak(new SpeechSynthesisUtterance(points[currentIndex].text));
-        currentIndex++; // переход к следующей точке
+        currentIndex++;
     }
 }
 
-// ===== вычисление расстояния в метрах между двумя точками по широте/долготе =====
+// ===== вычисление расстояния в метрах =====
 function getDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371000; // радиус Земли в метрах
+    const R = 6371000;
     const dLat = toRad(lat2 - lat1);
     const dLon = toRad(lon2 - lon1);
     const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
