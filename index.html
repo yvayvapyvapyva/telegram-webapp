@@ -9,72 +9,99 @@
 
 <style>
 html, body, #map {
+    margin: 0;
     width: 100%;
     height: 100%;
-    margin: 0;
+}
+#start {
+    position: absolute;
+    z-index: 10;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: black;
+    color: white;
+    font-size: 18px;
 }
 </style>
 </head>
 
 <body>
+
+<div id="start">Нажмите для запуска</div>
 <div id="map"></div>
 
 <script>
 let map, placemark;
 let azimuth = 0;
 
-ymaps.ready(() => {
-    map = new ymaps.Map("map", {
-        center: [0, 0],
-        zoom: 18,
-        type: 'yandex#satellite',
-        controls: []
-    });
+// кнопка запуска (обязательно для iOS)
+document.getElementById('start').onclick = async () => {
+    document.getElementById('start').remove();
 
-    placemark = new ymaps.Placemark([0, 0], {}, {
-        iconLayout: 'default#image',
-        iconImageHref: createArrowSVG(0),
-        iconImageSize: [40, 40],
-        iconImageOffset: [-20, -20]
-    });
-
-    map.geoObjects.add(placemark);
-
-    navigator.geolocation.watchPosition(pos => {
-        const coords = [pos.coords.latitude, pos.coords.longitude];
-        placemark.geometry.setCoordinates(coords);
-        map.setCenter(coords);
-    });
-});
-
-// компас
-window.addEventListener('deviceorientationabsolute', e => {
-    if (e.alpha !== null) {
-        azimuth = Math.round(360 - e.alpha);
-        placemark.options.set(
-            'iconImageHref',
-            createArrowSVG(azimuth)
-        );
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        await DeviceOrientationEvent.requestPermission();
     }
-});
 
-// голос раз в 10 секунд
-setInterval(() => {
-    speechSynthesis.speak(
-        new SpeechSynthesisUtterance("Азимут " + azimuth + " градусов")
-    );
-}, 10000);
+    initMap();
+    initCompass();
+    initVoice();
+};
 
-// SVG стрелка
-function createArrowSVG(angle) {
-    const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
-        <g transform="rotate(${angle},20,20)">
-            <polygon points="20,2 28,30 20,24 12,30" fill="red"/>
-        </g>
-    </svg>`;
-    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+function initMap() {
+    ymaps.ready(() => {
+        map = new ymaps.Map("map", {
+            center: [0, 0],
+            zoom: 18,
+            type: 'yandex#satellite',
+            controls: []
+        });
+
+        placemark = new ymaps.Placemark([0, 0], {}, {
+            iconLayout: 'default#image',
+            iconImageHref: arrowSVG(0),
+            iconImageSize: [40, 40],
+            iconImageOffset: [-20, -20]
+        });
+
+        map.geoObjects.add(placemark);
+
+        navigator.geolocation.watchPosition(p => {
+            const c = [p.coords.latitude, p.coords.longitude];
+            placemark.geometry.setCoordinates(c);
+            map.setCenter(c);
+        }, null, { enableHighAccuracy: true });
+    });
+}
+
+function initCompass() {
+    window.addEventListener('deviceorientation', e => {
+        if (e.alpha !== null) {
+            azimuth = Math.round(360 - e.alpha);
+            placemark.options.set('iconImageHref', arrowSVG(azimuth));
+        }
+    }, true);
+}
+
+function initVoice() {
+    setInterval(() => {
+        speechSynthesis.speak(
+            new SpeechSynthesisUtterance(`Азимут ${azimuth} градусов`)
+        );
+    }, 10000);
+}
+
+function arrowSVG(a) {
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
+            <g transform="rotate(${a},20,20)">
+                <polygon points="20,2 28,30 20,24 12,30" fill="red"/>
+            </g>
+        </svg>
+    `);
 }
 </script>
+
 </body>
 </html>
