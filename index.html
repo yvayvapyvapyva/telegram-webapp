@@ -33,7 +33,7 @@ html, body { margin:0; height:100%; font-family:Arial, sans-serif; }
 <button onclick="showPoints()">Обновить точки</button>
 <label>Расстояние срабатывания (м):</label>
 <input id="distanceTrigger" type="number" value="20" min="1" step="1">
-<div id="distance" style="margin-top:5px; font-weight:bold;">Расстояние: 0 м</div>
+<div id="distance" style="margin-top:5px; font-weight:bold;">Расстояние: 0 м | Азимут: 0°</div>
 </div>
 
 <div id="map"></div>
@@ -107,19 +107,38 @@ function showPoints(){
     if(points.length && autoCenter) map.setCenter(points[0].coords);
 }
 
-// ===== проверка расстояния =====
 function checkDistance(currentCoords){
     if(!points.length || currentIndex>=points.length) return;
-    const triggerDistance=parseFloat(document.getElementById('distanceTrigger').value)||20;
-    const target=points[currentIndex].coords;
-    const distance=getDistance(currentCoords[0],currentCoords[1],target[0],target[1]);
-    document.getElementById('distance').textContent=`Расстояние: ${Math.round(distance)} м`;
-    if(distance<=triggerDistance && speechAllowed){
-        const utter=new SpeechSynthesisUtterance(points[currentIndex].text);
+
+    const triggerDistance = parseFloat(document.getElementById('distanceTrigger').value) || 20;
+    const target = points[currentIndex].coords;
+    const distance = getDistance(currentCoords[0], currentCoords[1], target[0], target[1]);
+
+    // обновляем отображение расстояния и текущего азимута
+    document.getElementById('distance').textContent =
+        `Расстояние: ${Math.round(distance)} м | Азимут: ${Math.round(azimuth)}°`;
+
+    // проверка азимута с допустимым отклонением ±45°
+    const targetAzimuth = points[currentIndex].azimuth;
+    const minAz = (targetAzimuth - 45 + 360) % 360;
+    const maxAz = (targetAzimuth + 45) % 360;
+
+    let azMatch = false;
+    if(minAz < maxAz){
+        azMatch = azimuth >= minAz && azimuth <= maxAz;
+    } else {
+        // диапазон пересекает 0°
+        azMatch = azimuth >= minAz || azimuth <= maxAz;
+    }
+
+    if(distance <= triggerDistance && azMatch && speechAllowed){
+        const utter = new SpeechSynthesisUtterance(points[currentIndex].text);
         speechSynthesis.speak(utter);
         currentIndex++;
     }
 }
+
+
 
 // ===== расстояние =====
 function getDistance(lat1,lon1,lat2,lon2){
