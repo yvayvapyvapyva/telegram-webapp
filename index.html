@@ -2,25 +2,27 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>Навигация с голосом</title>
+<title>Навигация</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 <script src="https://api-maps.yandex.ru/2.1/?apikey=ВАШ_API_КЛЮЧ&lang=ru_RU"></script>
-
 <style>
-html, body { margin:0; height:100%; }
-#map { height:100%; }
+html, body { margin:0; height:100%; font-family:Arial, sans-serif; }
+#map { height:100%; width:100%; }
 #start { position:absolute; inset:0; z-index:20; background:black; color:white;
-    display:flex; align-items:center; justify-content:center; font-size:20px; cursor:pointer; }
-#panel { position:absolute; z-index:10; top:10px; left:10px; right:10px; background:white; padding:5px; }
-textarea { width:100%; height:120px; box-sizing:border-box; }
-button, select, input { width:100%; margin-top:5px; }
+    display:flex; align-items:center; justify-content:center; font-size:20px; cursor:pointer;}
+#panel { position:absolute; z-index:10; top:10px; right:10px; width:250px; background:white; padding:5px;
+    box-shadow:0 0 5px rgba(0,0,0,0.5); transition:right 0.3s;}
+#panel.collapsed { right:-240px; }
+#panel textarea { width:100%; height:200px; box-sizing:border-box; }
+#panel button, #panel input { width:100%; margin-top:5px; box-sizing:border-box; }
+#togglePanel { position:absolute; top:10px; right:10px; z-index:15; width:30px; height:30px; font-size:16px; cursor:pointer; background:white; border:none; box-shadow:0 0 3px rgba(0,0,0,0.5); }
 </style>
 </head>
-
 <body>
 
 <div id="start">Нажмите для запуска</div>
+
+<button id="togglePanel">&#9776;</button> <!-- кнопка панели -->
 
 <div id="panel">
 <textarea id="input">
@@ -28,210 +30,102 @@ button, select, input { width:100%; margin-top:5px; }
 56.340072,43.933019,90-Выполняем заезд в гараж
 56.340182,43.932832,180-Выезжаем с парковки направо
 </textarea>
-
 <button onclick="showPoints()">Обновить точки</button>
-<button id="toggleCenter">Автоцентр: Включено</button>
-
-<label for="voiceSelect">Голос:</label>
-<select id="voiceSelect"></select>
-
-<label for="rateInput">Скорость речи (0.5–2):</label>
-<input type="number" id="rateInput" value="1" min="0.5" max="2" step="0.1">
-
-<label for="distanceTrigger">Расстояние срабатывания (м):</label>
-<input type="number" id="distanceTrigger" value="20" min="1" step="1">
-
+<label>Расстояние срабатывания (м):</label>
+<input id="distanceTrigger" type="number" value="20" min="1" step="1">
 <div id="distance" style="margin-top:5px; font-weight:bold;">Расстояние: 0 м</div>
 </div>
 
 <div id="map"></div>
 
 <script>
-let map, placemark;
-let azimuth = 0;
-let points = [];
-let currentIndex = 0;
-let autoCenter = true;
-let speechAllowed = false;
-let selectedVoice = null;
-
-// ===== автоцентр =====
-document.getElementById('toggleCenter').onclick = () => {
-    autoCenter = !autoCenter;
-    document.getElementById('toggleCenter').textContent =
-        `Автоцентр: ${autoCenter ? 'Включено' : 'Выключено'}`;
-};
+let map, placemark, points=[], currentIndex=0, autoCenter=true, azimuth=0, speechAllowed=false;
 
 // ===== старт =====
 document.getElementById('start').onclick = async () => {
     document.getElementById('start').remove();
     speechAllowed = true;
-
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
-    }
-
-    if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
-        await DeviceOrientationEvent.requestPermission();
-    }
-
-    initVoices();
+    if('speechSynthesis' in window) speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+    if(typeof DeviceOrientationEvent?.requestPermission==='function') await DeviceOrientationEvent.requestPermission();
     initMap();
     initCompass();
 };
 
-// ===== загрузка русских голосов =====
-function initVoices(){
-    function loadVoices() {
-        const voices = speechSynthesis.getVoices();
-        const ruVoices = voices.filter(v => v.lang.startsWith('ru'));
-        const select = document.getElementById('voiceSelect');
-        select.innerHTML = '';
-        ruVoices.forEach(v => {
-            const option = document.createElement('option');
-            option.value = v.name;
-            option.textContent = `${v.name} (${v.lang})`;
-            select.appendChild(option);
-        });
-        selectedVoice = ruVoices[0] || null;
-        if(selectedVoice) select.value = selectedVoice.name;
-    }
-    loadVoices();
-    speechSynthesis.onvoiceschanged = loadVoices;
-
-    document.getElementById('voiceSelect').onchange = () => {
-        const name = document.getElementById('voiceSelect').value;
-        const voices = speechSynthesis.getVoices();
-        selectedVoice = voices.find(v => v.name === name);
-    };
-}
+// ===== переключение панели =====
+document.getElementById('togglePanel').onclick = () => {
+    const panel = document.getElementById('panel');
+    panel.classList.toggle('collapsed');
+};
 
 // ===== карта =====
 function initMap(){
     ymaps.ready(()=>{
-        map = new ymaps.Map("map", { center:[0,0], zoom:18, type:'yandex#satellite', controls:[] });
-
-        placemark = new ymaps.Placemark([0,0], {}, {
-            iconLayout:'default#image',
-            iconImageHref: arrowSVG(0,'red'),
-            iconImageSize:[40,40],
-            iconImageOffset:[-20,-20]
+        map = new ymaps.Map("map",{center:[0,0],zoom:18,type:'yandex#satellite',controls:[]});
+        placemark = new ymaps.Placemark([0,0],{},{
+            iconLayout:'default#image', iconImageHref:arrowSVG(0,'red'),
+            iconImageSize:[40,40], iconImageOffset:[-20,-20]
         });
-
         map.geoObjects.add(placemark);
-
-        map.events.add('boundschange', e => {
-            if(!e.get('originalEvent')) return;
-            autoCenter = false;
-            document.getElementById('toggleCenter').textContent = 'Автоцентр: Выключено';
-        });
-
+        map.events.add('boundschange', e => { if(e.get('originalEvent')) autoCenter=false; });
         navigator.geolocation.watchPosition(p=>{
-            const c = [p.coords.latitude, p.coords.longitude];
+            const c=[p.coords.latitude,p.coords.longitude];
             placemark.geometry.setCoordinates(c);
             if(autoCenter) map.setCenter(c);
             checkDistance(c);
-        }, error=>console.error(error), { enableHighAccuracy:true });
+        }, null, { enableHighAccuracy:true });
     });
 }
 
 // ===== компас =====
 function initCompass(){
-    window.addEventListener('deviceorientation', e=>{
-        if(e.webkitCompassHeading!==undefined){
-            azimuth=Math.round(e.webkitCompassHeading);
-            updateArrow();
-        }
-    }, true);
-    window.addEventListener('deviceorientationabsolute', e=>{
-        if(!e.absolute || e.alpha===null) return;
-        if(Math.abs(e.beta)>45) return;
-        azimuth=Math.round(360-e.alpha);
-        updateArrow();
-    }, true);
+    window.addEventListener('deviceorientation', e=>{ if(e.webkitCompassHeading!==undefined){ azimuth=Math.round(e.webkitCompassHeading); updateArrow(); }}, true);
+    window.addEventListener('deviceorientationabsolute', e=>{ if(!e.absolute||e.alpha===null||Math.abs(e.beta)>45) return; azimuth=Math.round(360-e.alpha); updateArrow(); }, true);
 }
+function updateArrow(){ placemark.options.set('iconImageHref', arrowSVG(azimuth,'red')); }
 
-// ===== обновление стрелки =====
-function updateArrow(){
-    placemark.options.set('iconImageHref', arrowSVG(azimuth,'red'));
-}
-
-// ===== генерация SVG =====
+// ===== стрелка =====
 function arrowSVG(a,color='red',number=null){
-    if(number===null){
-        return 'data:image/svg+xml;utf8,'+encodeURIComponent(`
-            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
-                <g transform="rotate(${a},20,20)">
-                    <polygon points="20,2 28,30 20,24 12,30" fill="${color}"/>
-                </g>
-            </svg>
-        `);
-    } else {
-        return 'data:image/svg+xml;utf8,'+encodeURIComponent(`
-            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
-                <g transform="rotate(${a},20,20)">
-                    <polygon points="20,2 28,30 20,24 12,30" fill="blue"/>
-                </g>
-                <text x="20" y="28" font-size="14" text-anchor="middle" font-family="Arial" fill="white">${number}</text>
-            </svg>
-        `);
-    }
+    if(number===null) return 'data:image/svg+xml;utf8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><g transform="rotate(${a},20,20)"><polygon points="20,2 28,30 20,24 12,30" fill="${color}"/></g></svg>`);
+    return 'data:image/svg+xml;utf8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><g transform="rotate(${a},20,20)"><polygon points="20,2 28,30 20,24 12,30" fill="blue"/></g><text x="20" y="28" font-size="14" text-anchor="middle" font-family="Arial" fill="white">${number}</text></svg>`);
 }
 
 // ===== точки маршрута =====
 function showPoints(){
     points.forEach(p=>map.geoObjects.remove(p.placemark));
     points=[]; currentIndex=0;
-
-    const lines = document.getElementById('input').value.split('\n').filter(l=>l.trim());
+    const lines=document.getElementById('input').value.split('\n').filter(l=>l.trim());
     lines.forEach((line,index)=>{
-        const [lat, lon, rest] = line.split(',');
-        const [az,text] = rest.split('-');
+        const [lat, lon, rest]=line.split(',');
+        const [az,text]=rest.split('-');
         const azimuthPoint=parseFloat(az);
-
-        const pm = new ymaps.Placemark(
-            [parseFloat(lat),parseFloat(lon)],
-            { balloonContent:text },
-            { iconLayout:'default#image',
-              iconImageHref: arrowSVG(azimuthPoint,'blue',index+1),
-              iconImageSize:[36,36],
-              iconImageOffset:[-18,-18]
-            }
-        );
+        const pm=new ymaps.Placemark([parseFloat(lat),parseFloat(lon)],{balloonContent:text},{
+            iconLayout:'default#image', iconImageHref:arrowSVG(azimuthPoint,'blue',index+1), iconImageSize:[36,36], iconImageOffset:[-18,-18]
+        });
         map.geoObjects.add(pm);
         points.push({coords:[parseFloat(lat),parseFloat(lon)], text, azimuth:azimuthPoint, placemark:pm});
     });
-
     if(points.length && autoCenter) map.setCenter(points[0].coords);
 }
 
 // ===== проверка расстояния =====
 function checkDistance(currentCoords){
     if(!points.length || currentIndex>=points.length) return;
-
-    const triggerDistance = parseFloat(document.getElementById('distanceTrigger').value) || 20;
-
+    const triggerDistance=parseFloat(document.getElementById('distanceTrigger').value)||20;
     const target=points[currentIndex].coords;
     const distance=getDistance(currentCoords[0],currentCoords[1],target[0],target[1]);
     document.getElementById('distance').textContent=`Расстояние: ${Math.round(distance)} м`;
-
-    if(distance <= triggerDistance && speechAllowed){
+    if(distance<=triggerDistance && speechAllowed){
         const utter=new SpeechSynthesisUtterance(points[currentIndex].text);
-        if(selectedVoice) utter.voice=selectedVoice;
-        utter.rate=parseFloat(document.getElementById('rateInput').value)||1;
         speechSynthesis.speak(utter);
         currentIndex++;
     }
 }
 
-// ===== расстояние в метрах =====
+// ===== расстояние =====
 function getDistance(lat1,lon1,lat2,lon2){
-    const R=6371000;
-    const dLat=toRad(lat2-lat1);
-    const dLon=toRad(lon2-lon1);
+    const R=6371000, dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
     const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
-    const c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-    return R*c;
+    return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 function toRad(deg){ return deg*Math.PI/180; }
 </script>
