@@ -8,13 +8,13 @@
 <script src="https://api-maps.yandex.ru/2.1/?apikey=ВАШ_API_КЛЮЧ&lang=ru_RU"></script>
 
 <style>
-html, body { margin: 0; height: 100%; }
-#map { height: 100%; }
-#start { position: absolute; inset:0; z-index:20; background:black; color:white;
-    display:flex; align-items:center; justify-content:center; font-size:20px; cursor:pointer;}
-#panel { position:absolute; z-index:10; top:10px; left:10px; right:10px; background:white; padding:5px;}
-textarea { width:100%; height:120px; box-sizing:border-box;}
-button, select, input { width:100%; margin-top:5px;}
+html, body { margin:0; height:100%; }
+#map { height:100%; }
+#start { position:absolute; inset:0; z-index:20; background:black; color:white;
+    display:flex; align-items:center; justify-content:center; font-size:20px; cursor:pointer; }
+#panel { position:absolute; z-index:10; top:10px; left:10px; right:10px; background:white; padding:5px; }
+textarea { width:100%; height:120px; box-sizing:border-box; }
+button, select, input { width:100%; margin-top:5px; }
 </style>
 </head>
 
@@ -37,6 +37,9 @@ button, select, input { width:100%; margin-top:5px;}
 
 <label for="rateInput">Скорость речи (0.5–2):</label>
 <input type="number" id="rateInput" value="1" min="0.5" max="2" step="0.1">
+
+<label for="distanceTrigger">Расстояние срабатывания (м):</label>
+<input type="number" id="distanceTrigger" value="20" min="1" step="1">
 
 <div id="distance" style="margin-top:5px; font-weight:bold;">Расстояние: 0 м</div>
 </div>
@@ -64,12 +67,10 @@ document.getElementById('start').onclick = async () => {
     document.getElementById('start').remove();
     speechAllowed = true;
 
-    // разблокировка синтеза речи Safari
     if ('speechSynthesis' in window) {
         window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
     }
 
-    // компас iOS
     if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
         await DeviceOrientationEvent.requestPermission();
     }
@@ -79,11 +80,11 @@ document.getElementById('start').onclick = async () => {
     initCompass();
 };
 
-// ===== загрузка голосов (только русские) =====
+// ===== загрузка русских голосов =====
 function initVoices(){
     function loadVoices() {
         const voices = speechSynthesis.getVoices();
-        const ruVoices = voices.filter(v => v.lang.startsWith('ru')); // только русские
+        const ruVoices = voices.filter(v => v.lang.startsWith('ru'));
         const select = document.getElementById('voiceSelect');
         select.innerHTML = '';
         ruVoices.forEach(v => {
@@ -92,7 +93,6 @@ function initVoices(){
             option.textContent = `${v.name} (${v.lang})`;
             select.appendChild(option);
         });
-        // выбрать первый русский голос
         selectedVoice = ruVoices[0] || null;
         if(selectedVoice) select.value = selectedVoice.name;
     }
@@ -208,11 +208,14 @@ function showPoints(){
 // ===== проверка расстояния =====
 function checkDistance(currentCoords){
     if(!points.length || currentIndex>=points.length) return;
+
+    const triggerDistance = parseFloat(document.getElementById('distanceTrigger').value) || 20;
+
     const target=points[currentIndex].coords;
     const distance=getDistance(currentCoords[0],currentCoords[1],target[0],target[1]);
     document.getElementById('distance').textContent=`Расстояние: ${Math.round(distance)} м`;
 
-    if(distance<=20 && speechAllowed){
+    if(distance <= triggerDistance && speechAllowed){
         const utter=new SpeechSynthesisUtterance(points[currentIndex].text);
         if(selectedVoice) utter.voice=selectedVoice;
         utter.rate=parseFloat(document.getElementById('rateInput').value)||1;
