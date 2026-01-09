@@ -55,6 +55,7 @@ button {
 56.340182, 43.932832,3-Выезжаем с парковки направо
 </textarea>
 <button onclick="showPoints()">Показать точки</button>
+<div id="distance" style="margin-top:5px; font-weight:bold;">Расстояние: 0 м</div>
 </div>
 
 <div id="map"></div>
@@ -62,6 +63,8 @@ button {
 <script>
 let map, placemark;
 let azimuth = 0;
+let points = [];       // массив точек маршрута
+let currentIndex = 0;  // текущая точка маршрута
 
 // ===== запуск (обязательно для iOS) =====
 document.getElementById('start').onclick = async () => {
@@ -73,7 +76,6 @@ document.getElementById('start').onclick = async () => {
 
     initMap();
     initCompass();
-    initVoice();
 };
 
 // ===== карта и геолокация =====
@@ -99,14 +101,15 @@ function initMap() {
             const c = [p.coords.latitude, p.coords.longitude];
             placemark.geometry.setCoordinates(c);
             map.setCenter(c);
+
+            // проверка приближения к текущей точке
+            checkDistance(c);
         }, null, { enableHighAccuracy: true });
     });
 }
 
 // ===== компас =====
 function initCompass() {
-
-    // iOS — абсолютный азимут
     window.addEventListener('deviceorientation', e => {
         if (e.webkitCompassHeading !== undefined) {
             azimuth = Math.round(e.webkitCompassHeading);
@@ -114,11 +117,9 @@ function initCompass() {
         }
     }, true);
 
-    // Android — ТОЛЬКО абсолютный и только при горизонтальном положении
     window.addEventListener('deviceorientationabsolute', e => {
         if (!e.absolute || e.alpha === null) return;
-        if (Math.abs(e.beta) > 45) return; // защита от вертикали
-
+        if (Math.abs(e.beta) > 45) return;
         azimuth = Math.round(360 - e.alpha);
         updateArrow();
     }, true);
@@ -126,19 +127,7 @@ function initCompass() {
 
 // ===== обновление стрелки =====
 function updateArrow() {
-    placemark.options.set(
-        'iconImageHref',
-        arrowSVG(azimuth)
-    );
-}
-
-// ===== голос =====
-function initVoice() {
-    setInterval(() => {
-        speechSynthesis.speak(
-            new SpeechSynthesisUtterance(`Азимут ${azimuth} градусов`)
-        );
-    }, 10000);
+    placemark.options.set('iconImageHref', arrowSVG(azimuth));
 }
 
 // ===== SVG стрелка =====
@@ -158,6 +147,9 @@ function showPoints() {
         .split('\n')
         .filter(l => l.trim());
 
+    points = [];        // очистка массива точек
+    currentIndex = 0;   // начинаем с первой точки
+
     lines.forEach(line => {
         const [lat, lon, rest] = line.split(',');
         const [num, text] = rest.split('-');
@@ -166,13 +158,61 @@ function showPoints() {
             [parseFloat(lat), parseFloat(lon)],
             { balloonContent: text },
             {
-                preset: 'islands#redCircleIcon',
-                iconContent: num
+                iconLayout: 'default#image',
+                iconImageHref: numberSVG(num),
+                iconImageSize: [36, 36],
+                iconImageOffset: [-18, -18]
             }
         );
 
         map.geoObjects.add(pm);
+        points.push({coords: [parseFloat(lat), parseFloat(lon)], text}); // добавляем точку в массив
     });
+}
+
+// ===== SVG генератор номера =====
+function numberSVG(n) {
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36">
+            <circle cx="18" cy="18" r="16" fill="white" stroke="black" stroke-width="2"/>
+            <text x="18" y="23"
+                  font-size="14"
+                  text-anchor="middle"
+                  font-family="Arial"
+                  fill="black">${n}</text>
+        </svg>
+    `);
+}
+
+// ===== проверка расстояния до текущей точки =====
+function checkDistance(currentCoords) {
+    if (!points.length || currentIndex >= points.length) return;
+
+    const target = points[currentIndex].coords;
+    const distance = getDistance(currentCoords[0], currentCoords[1], target[0], target[1]);
+
+    // обновляем текст с расстоянием
+    document.getElementById('distance').textContent = `Расстояние: ${Math.round(distance)} м`;
+
+    if (distance <= 20) {
+        // озвучивание команды
+        speechSynthesis.speak(new SpeechSynthesisUtterance(points[currentIndex].text));
+        currentIndex++; // переход к следующей точке
+    }
+}
+
+// ===== вычисление расстояния в метрах между двумя точками по широте/долготе =====
+function getDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // радиус Земли в метрах
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+function toRad(deg) {
+    return deg * Math.PI / 180;
 }
 </script>
 
