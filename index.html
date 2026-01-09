@@ -2,18 +2,47 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>Навигация с азимутами</title>
+<title>Навигация с номерами точек</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <script src="https://api-maps.yandex.ru/2.1/?apikey=ВАШ_API_КЛЮЧ&lang=ru_RU"></script>
 
 <style>
-html, body { margin:0; height:100%; }
-#map { height:100%; }
-#start { position:absolute; inset:0; z-index:20; background:black; color:white; display:flex; align-items:center; justify-content:center; }
-#panel { position:absolute; z-index:10; top:10px; left:10px; right:10px; background:white; }
-textarea { width:100%; height:150px; box-sizing:border-box; }
-button { width:100%; margin-top:5px; }
+html, body {
+    margin: 0;
+    height: 100%;
+}
+#map {
+    height: 100%;
+}
+#start {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    background: black;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#panel {
+    position: absolute;
+    z-index: 10;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    background: white;
+    padding: 5px;
+}
+textarea {
+    width: 100%;
+    height: 120px;
+    box-sizing: border-box;
+}
+button {
+    width: 100%;
+    margin-top: 5px;
+}
 </style>
 </head>
 
@@ -23,12 +52,11 @@ button { width:100%; margin-top:5px; }
 
 <div id="panel">
 <textarea id="input">
-56.339941,43.933242,1-Выполняем параллельную парковку,90
-56.340072,43.933019,2-Выполняем заезд в гараж,180
-56.340182,43.932832,3-Выезжаем с парковки направо,270
-56.340300,43.932500,4-Поворот налево,45
+56.339941,43.933242,0-Выполняем параллельную парковку
+56.340072,43.933019,90-Выполняем заезд в гараж
+56.340182,43.932832,180-Выезжаем с парковки направо
 </textarea>
-<button onclick="showPoints()">Показать точки</button>
+<button onclick="showPoints()">Обновить точки</button>
 <button id="toggleCenter">Автоцентр: Включено</button>
 <div id="distance" style="margin-top:5px; font-weight:bold;">Расстояние: 0 м</div>
 </div>
@@ -38,34 +66,46 @@ button { width:100%; margin-top:5px; }
 <script>
 let map, placemark;
 let azimuth = 0;
-let points = [];       
-let currentIndex = 0;  
-let autoCenter = true; 
+let points = [];
+let currentIndex = 0;
+let autoCenter = true;
 
+// ===== кнопка включения/выключения автоцентра =====
 document.getElementById('toggleCenter').onclick = () => {
     autoCenter = !autoCenter;
     document.getElementById('toggleCenter').textContent = 
         `Автоцентр: ${autoCenter ? 'Включено' : 'Выключено'}`;
 };
 
+// ===== запуск (обязательно для iOS) =====
 document.getElementById('start').onclick = async () => {
     document.getElementById('start').remove();
+
     if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
         await DeviceOrientationEvent.requestPermission();
     }
+
     initMap();
     initCompass();
 };
 
+// ===== карта и геолокация =====
 function initMap() {
     ymaps.ready(() => {
-        map = new ymaps.Map("map", { center:[0,0], zoom:18, type:'yandex#satellite', controls:[] });
-        placemark = new ymaps.Placemark([0,0], {}, {
-            iconLayout: 'default#image',
-            iconImageHref: arrowSVG(0, ''), // стрелка пользователя без номера
-            iconImageSize: [40,40],
-            iconImageOffset: [-20,-20]
+        map = new ymaps.Map("map", {
+            center: [0, 0],
+            zoom: 18,
+            type: 'yandex#satellite',
+            controls: []
         });
+
+        placemark = new ymaps.Placemark([0, 0], {}, {
+            iconLayout: 'default#image',
+            iconImageHref: arrowSVG(0, 'red'),
+            iconImageSize: [40, 40],
+            iconImageOffset: [-20, -20]
+        });
+
         map.geoObjects.add(placemark);
 
         map.events.add('boundschange', (e) => {
@@ -77,92 +117,128 @@ function initMap() {
         navigator.geolocation.watchPosition(p => {
             const c = [p.coords.latitude, p.coords.longitude];
             placemark.geometry.setCoordinates(c);
+
             if (autoCenter) map.setCenter(c);
+
             checkDistance(c);
-        }, null, { enableHighAccuracy:true });
+        }, error => console.error(error), { enableHighAccuracy: true });
     });
 }
 
+// ===== компас =====
 function initCompass() {
     window.addEventListener('deviceorientation', e => {
-        if (e.webkitCompassHeading!==undefined){ azimuth=Math.round(e.webkitCompassHeading); updateArrow(); }
+        if (e.webkitCompassHeading !== undefined) {
+            azimuth = Math.round(e.webkitCompassHeading);
+            updateArrow();
+        }
     }, true);
+
     window.addEventListener('deviceorientationabsolute', e => {
-        if(!e.absolute || e.alpha===null) return;
-        if(Math.abs(e.beta)>45) return;
-        azimuth = Math.round(360 - e.alpha); updateArrow();
+        if (!e.absolute || e.alpha === null) return;
+        if (Math.abs(e.beta) > 45) return;
+        azimuth = Math.round(360 - e.alpha);
+        updateArrow();
     }, true);
 }
 
+// ===== обновление стрелки текущей позиции =====
 function updateArrow() {
-    placemark.options.set('iconImageHref', arrowSVG(azimuth, '')); // стрелка пользователя
+    placemark.options.set('iconImageHref', arrowSVG(azimuth, 'red'));
 }
 
-// ===== SVG генератор стрелки с номером =====
-function arrowSVG(a, num) {
-    return 'data:image/svg+xml;utf8,' + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
-            <g transform="rotate(${a},20,20)">
-                <polygon points="20,2 28,30 20,24 12,30" fill="red"/>
-            </g>
-            ${num ? `<text x="20" y="36" font-size="12" text-anchor="middle" fill="black" font-family="Arial">${num}</text>` : ''}
-        </svg>
-    `);
+// ===== SVG стрелка =====
+function arrowSVG(a, color='red', number=null) {
+    if(number === null){
+        // обычная стрелка
+        return 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
+                <g transform="rotate(${a},20,20)">
+                    <polygon points="20,2 28,30 20,24 12,30" fill="${color}"/>
+                </g>
+            </svg>
+        `);
+    } else {
+        // стрелка с номером внутри
+        return 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
+                <g transform="rotate(${a},20,20)">
+                    <polygon points="20,2 28,30 20,24 12,30" fill="blue"/>
+                </g>
+                <text x="20" y="23" font-size="14" text-anchor="middle" font-family="Arial" fill="white">${number}</text>
+            </svg>
+        `);
+    }
 }
 
-// ===== точки маршрута с азимутом и номером =====
+// ===== точки маршрута =====
 function showPoints() {
-    const lines = document.getElementById('input').value.split('\n').filter(l=>l.trim());
-    points = []; currentIndex=0;
+    // удаляем старые точки
+    points.forEach(p => map.geoObjects.remove(p.placemark));
+    points = [];
+    currentIndex = 0;
 
-    lines.forEach(line => {
-        // формат: lat,lon,num-команда,azimuth
+    const lines = document.getElementById('input').value
+        .split('\n')
+        .filter(l => l.trim());
+
+    lines.forEach((line, index) => {
         const [lat, lon, rest] = line.split(',');
-        const [numText, azStr] = rest.split(',');
-        const [num, text] = numText.split('-');
-        const az = parseFloat(azStr) || 0;
+        const [az, text] = rest.split('-');
+        const azimuthPoint = parseFloat(az);
 
         const pm = new ymaps.Placemark(
             [parseFloat(lat), parseFloat(lon)],
             { balloonContent: text },
             {
                 iconLayout: 'default#image',
-                iconImageHref: arrowSVG(az, num), // стрелка с собственным азимутом и номером
-                iconImageSize: [40,40],
-                iconImageOffset: [-20,-20]
+                iconImageHref: arrowSVG(azimuthPoint, 'blue', index + 1),
+                iconImageSize: [40, 40],
+                iconImageOffset: [-20, -20]
             }
         );
 
         map.geoObjects.add(pm);
-        points.push({ coords:[parseFloat(lat),parseFloat(lon)], text, az });
+        points.push({
+            coords: [parseFloat(lat), parseFloat(lon)],
+            text,
+            azimuth: azimuthPoint,
+            placemark: pm
+        });
     });
 
-    if(points.length && autoCenter) map.setCenter(points[0].coords);
+    if(points.length && autoCenter){
+        map.setCenter(points[0].coords);
+    }
 }
 
 // ===== проверка расстояния =====
 function checkDistance(currentCoords) {
-    if(!points.length || currentIndex>=points.length) return;
+    if (!points.length || currentIndex >= points.length) return;
+
     const target = points[currentIndex].coords;
-    const distance = getDistance(currentCoords[0],currentCoords[1],target[0],target[1]);
+    const distance = getDistance(currentCoords[0], currentCoords[1], target[0], target[1]);
+
     document.getElementById('distance').textContent = `Расстояние: ${Math.round(distance)} м`;
+
     if(distance <= 20){
         speechSynthesis.speak(new SpeechSynthesisUtterance(points[currentIndex].text));
         currentIndex++;
     }
 }
 
+// ===== расстояние в метрах =====
 function getDistance(lat1, lon1, lat2, lon2){
     const R = 6371000;
-    const dLat = toRad(lat2-lat1);
-    const dLon = toRad(lon2-lon1);
-    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
-    const c = 2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-    return R*c;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
 }
 
-function toRad(deg){ return deg*Math.PI/180; }
-
+function toRad(deg){ return deg * Math.PI / 180; }
 </script>
+
 </body>
 </html>
