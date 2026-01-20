@@ -1,289 +1,348 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Yandex Map Paint</title>
-    
-    <!-- Подключение API Яндекс.Карт -->
-    <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=" type="text/javascript"></script>
-
+    <meta charset="utf-8">
+    <title>Навигация</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://api-maps.yandex.ru/2.1/?apikey=ВАШ_API_КЛЮЧ&lang=ru_RU"></script>
     <style>
-        :root {
-            --primary: #007AFF;
-            --danger: #FF3B30;
-            --bg-panel: rgba(255, 255, 255, 0.92);
+        html, body { margin:0; height:100%; font-family:Arial, sans-serif; overflow: hidden; }
+        #map { width:100%; height:100%; background: #000; }
+        #start{position:absolute;inset:0;z-index:100;background:#000;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer}
+        
+        /* Map control buttons */
+        .map-btn {
+            position:absolute;
+            z-index:16;
+            width:42px;
+            height:42px;
+            background:#fff;
+            border:none;
+            border-radius:8px;
+            font-size:20px;
+            box-shadow:0 2px 5px rgba(0,0,0,0.3);
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            cursor:pointer;
+            transition: all 0.2s ease;
+        }
+        #togglePanelBtn { top:10px; left:10px; }
+        #toggleAutoCenter { 
+            top:10px; 
+            right:10px; 
+        }
+        
+        #toggleAutoCenter svg {
+            width: 24px;
+            height: 24px;
+            fill: #666;
+        }
+        #toggleAutoCenter.on svg {
+            fill: #007bff;
         }
 
-        html, body {
-            width: 100%;
-            height: 100%;
-            padding: 0;
-            margin: 0;
-            overflow: hidden;
-            background: #000;
-            font-family: -apple-system, system-ui, sans-serif;
-        }
-
-        #map {
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-        }
-
-        /* Панель управления в стиле iOS */
-        #toolbar {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 100;
-            background: var(--bg-panel);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            padding: 8px 16px;
-            border-radius: 40px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-            border: 0.5px solid rgba(0,0,0,0.1);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .btn {
-            border: none;
-            background: none;
-            padding: 10px 16px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            color: #000;
-            transition: 0.2s;
-            white-space: nowrap;
-        }
-
-        .btn:active {
-            opacity: 0.6;
-            transform: scale(0.95);
-        }
-
-        .btn-draw.active {
-            background: var(--primary);
-            color: #fff;
-        }
-
-        .btn-clear {
-            color: var(--danger);
-        }
-
-        .color-picker {
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            border: 2px solid #fff;
-            box-shadow: 0 0 0 1px rgba(0,0,0,0.1);
-            padding: 0;
-            overflow: hidden;
-            cursor: pointer;
-        }
-
-        input[type="color"] {
-            border: none;
-            width: 140%;
-            height: 140%;
-            margin: -20%;
-            cursor: pointer;
-        }
-
-        /* Оверлей для рисования */
-        #paint-canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 50;
-            display: none;
-            touch-action: none; /* Важно для iPad: отключает прокрутку при рисовании */
-        }
-
-        #paint-canvas.active {
-            display: block;
-            cursor: crosshair;
-        }
-
-        .instructions {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 100;
-            background: rgba(0,0,0,0.6);
-            color: #fff;
-            padding: 8px 20px;
-            border-radius: 20px;
-            font-size: 13px;
-            pointer-events: none;
-            opacity: 0;
-            transition: 0.3s;
-        }
-
-        .instructions.visible {
-            opacity: 1;
-        }
+        #panel{position:absolute;top:60px;left:10px;z-index:15;width:280px;max-height:70%;background:rgba(255,255,255,0.95);padding:12px;border-radius:8px;display:none;overflow-y:auto;box-shadow:0 2px 10px rgba(0,0,0,0.2)}
+        #panel select, #panel button {width:100%;margin-top:8px;padding:8px;box-sizing:border-box}
+        #panel input[type="number"] {width:100%;margin-top:8px;padding:8px;box-sizing:border-box}
+        #panel label{font-size:12px;font-weight:bold;display:block;margin-top:10px}
+        #targets div{padding:8px;border-bottom:1px solid #ddd;cursor:pointer;font-size:14px}
+        #targets div.active{background:#c8f7c5;font-weight:bold}
+        #info{position:absolute;bottom:0;left:0;right:0;background:rgba(255,255,255,0.9);padding:10px;font-weight:bold;z-index:15;font-size:14px;text-align:center;border-top:1px solid #ccc}
+        hr{margin:12px 0;border:0;border-top:1px solid #ccc}
     </style>
 </head>
 <body>
 
-    <div id="toolbar">
-        <div class="color-picker">
-            <input type="color" id="strokeColor" value="#FF3B30">
-        </div>
-        <button id="toggleDraw" class="btn btn-draw">
-            <span>✏️</span> Рисовать
-        </button>
-        <button id="clearAll" class="btn btn-clear">
-            <span>🗑️</span> Очистить
-        </button>
-    </div>
+<div id="start">Нажмите для запуска</div>
+<button id="togglePanelBtn" class="map-btn">☰</button>
+<button id="toggleAutoCenter" class="map-btn on" title="Автоцентрирование">
+    <svg viewBox="0 0 24 24">
+        <path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z" />
+    </svg>
+</button>
 
-    <div id="instructions" class="instructions">Рисуйте пальцем поверх карты</div>
+<div id="panel">
+    <label>Маршрут с Gist</label>
+    <select id="gistSelect"><option value="">-- Загрузка... --</option></select>
+    <label>Дистанция триггера (м)</label>
+    <input id="distanceTrigger" type="number" value="20">
+    <hr>
+    <div id="targets"></div>
+</div>
 
-    <canvas id="paint-canvas"></canvas>
-    <div id="map"></div>
+<div id="info">Ожидание GPS…</div>
+<div id="map"></div>
 
-    <script type="text/javascript">
-        ymaps.ready(init);
+<script>
+/* ==== CONSTANTS AND VARIABLES ==== */
+const apiKey = ""; 
+const DEG_TO_RAD = Math.PI / 180;
+const RAD_TO_DEG = 180 / Math.PI;
+const R_EARTH = 6371000;
+const AZ_AVG_LIMIT = 2;
 
-        function init() {
-            const map = new ymaps.Map("map", {
-                center: [55.753215, 37.622504],
-                zoom: 12,
-                type: 'yandex#satellite',
-                controls: [] // Минимализм для iPad
-            }, {
-                suppressMapOpenBlock: true
-            });
+let map, userPlacemark, points = [], autoCenter = true, wakeLock = null;
+let azHistory = [], lastAzimuth = 0, lastSpeed = 0, lastCoords = [0, 0];
+const svgCache = new Map();
 
-            const canvas = document.getElementById('paint-canvas');
-            const ctx = canvas.getContext('2d');
-            const toggleBtn = document.getElementById('toggleDraw');
-            const clearBtn = document.getElementById('clearAll');
-            const colorInput = document.getElementById('strokeColor');
-            const instructions = document.getElementById('instructions');
+/* ==== DOM ELEMENTS ==== */
+const doc = document;
+const els = {
+    start: doc.getElementById('start'),
+    panel: doc.getElementById('panel'),
+    togglePanelBtn: doc.getElementById('togglePanelBtn'),
+    targets: doc.getElementById('targets'),
+    info: doc.getElementById('info'),
+    distanceTrigger: doc.getElementById('distanceTrigger'),
+    toggleAutoCenter: doc.getElementById('toggleAutoCenter'),
+    gistSelect: doc.getElementById('gistSelect')
+};
 
-            let isDrawingMode = false;
-            let isDrawing = false;
-            let currentPath = [];
-            const drawnLayers = [];
+/* ==== INITIALIZATION ==== */
+els.start.onclick = async () => {
+    els.start.remove();
+    // Start with system enhanced voice
+    speakTextSystem("Система навигации готова");
+    
+    if ('wakeLock' in navigator) {
+        try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){}
+    }
+    initMap();
+    loadGistFiles();
+};
 
-            // Подгоняем размер холста под экран
-            function resizeCanvas() {
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
+els.togglePanelBtn.onclick = () => {
+    const isShown = els.panel.style.display === 'block';
+    els.panel.style.display = isShown ? 'none' : 'block';
+};
+
+els.toggleAutoCenter.onclick = () => {
+    autoCenter = !autoCenter;
+    els.toggleAutoCenter.classList.toggle('on', autoCenter);
+};
+
+/* ==== SYSTEM ENHANCED TTS (Option 3) ==== */
+function speakTextSystem(text) {
+    if (!text) return;
+
+    // Use SpeechSynthesisUtterance directly
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+
+    // Strategy: find the best Russian male voice
+    // 1. Look for "Google Russian" (usually high quality)
+    // 2. Look for "Microsoft Pavel" or "Microsoft Dmitry" (Neural/Online)
+    // 3. Any Russian voice with "Premium" or "Natural" in name
+    // 4. Default Russian voice
+    
+    let preferredVoice = voices.find(v => v.lang.includes('ru') && v.name.includes('Google')) ||
+                         voices.find(v => v.lang.includes('ru') && (v.name.includes('Dmitry') || v.name.includes('Pavel'))) ||
+                         voices.find(v => v.lang.includes('ru') && v.name.includes('Natural')) ||
+                         voices.find(v => v.lang.includes('ru'));
+
+    if (preferredVoice) {
+        utterance.voice = preferredVoice;
+    }
+    
+    utterance.lang = 'ru-RU';
+    utterance.rate = 1.0; 
+    utterance.pitch = 1.0;
+
+    window.speechSynthesis.cancel(); // Stop current speech
+    window.speechSynthesis.speak(utterance);
+}
+
+// Voices are loaded asynchronously, so we trigger a dummy call to "wake up" the list
+window.speechSynthesis.getVoices();
+if (speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+}
+
+/* ==== CLOUD TTS FALLBACK (Kept for reference or if API Key provided) ==== */
+async function speakTextCloud(text) {
+    if (!apiKey) {
+        speakTextSystem(text);
+        return;
+    }
+    // ... cloud logic ...
+}
+
+/* ==== MAP LOGIC ==== */
+function initMap(){
+    ymaps.ready(() => {
+        map = new ymaps.Map("map", {
+            center: [0,0], zoom: 18, type: 'yandex#satellite', controls: []
+        });
+
+        userPlacemark = new ymaps.Placemark([0,0], {}, {
+            iconLayout: 'default#image',
+            iconImageHref: getArrowSVG(0, 'red'),
+            iconImageSize: [40, 40],
+            iconImageOffset: [-20, -20]
+        });
+
+        map.geoObjects.add(userPlacemark);
+        navigator.geolocation.watchPosition(onGPS, null, {
+            enableHighAccuracy: true, maximumAge: 0, timeout: 5000
+        });
+    });
+}
+
+function onGPS(p){
+    const coords = [p.coords.latitude, p.coords.longitude];
+    lastCoords = coords;
+    const speed = p.coords.speed != null ? (p.coords.speed * 3.6) : 0;
+    lastSpeed = speed.toFixed(1);
+
+    if (p.coords.heading !== null && !isNaN(p.coords.heading) && speed >= 3) {
+        azHistory.push(p.coords.heading);
+        while (azHistory.length > AZ_AVG_LIMIT) azHistory.shift();
+        lastAzimuth = averageAngle(azHistory);
+    }
+
+    userPlacemark.geometry.setCoordinates(coords);
+    userPlacemark.options.set('iconImageHref', getArrowSVG(lastAzimuth, 'red'));
+
+    if (autoCenter) map.setCenter(coords);
+    updateInfo(coords, lastSpeed, lastAzimuth);
+}
+
+function averageAngle(arr){
+    let x = 0, y = 0;
+    for (let i = 0; i < arr.length; i++){
+        const r = arr[i] * DEG_TO_RAD;
+        x += Math.cos(r);
+        y += Math.sin(r);
+    }
+    return (Math.atan2(y, x) * RAD_TO_DEG + 360) % 360;
+}
+
+function getArrowSVG(a, color, num = '', opacity = 1, highlight = false) {
+    const key = `${Math.round(a)}|${color}|${num}|${opacity}|${highlight}`;
+    if (svgCache.has(key)) return svgCache.get(key);
+
+    const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
+        <g transform="rotate(${a},20,20)">
+            <polygon points="20,2 30,32 20,26 10,32" fill="${color}" fill-opacity="${opacity}" stroke="${highlight ? '#7CFC00' : '#000'}" stroke-width="${highlight ? 2 : 1}" stroke-linejoin="round"/>
+        </g>
+        ${num ? `<text x="20" y="22" font-size="14" font-family="Arial" text-anchor="middle" fill="#fff" font-weight="bold" stroke="#000" stroke-width="0.5">${num}</text>` : ''}
+    </svg>`;
+    
+    const res = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+    if (svgCache.size > 200) svgCache.clear();
+    svgCache.set(key, res);
+    return res;
+}
+
+function updateInfo(pos, speed, az) {
+    if (!points.length) {
+        els.info.textContent = 'Маршрут пуст';
+        return;
+    }
+
+    const p = points[0];
+    const dist = Math.round(getDistance(pos[0], pos[1], p.coords[0], p.coords[1]));
+    const diff = Math.abs(((Math.round(az) - p.azimuth + 540) % 360) - 180);
+
+    els.info.textContent = `№${p.id} | ${p.text} | Д: ${dist}м | Аз:${Math.round(az)}° | Цель:${p.azimuth}° | ${speed} км/ч`;
+
+    if (dist <= (+els.distanceTrigger.value || 20) && diff <= 45) {
+        triggerPoint(p);
+    }
+}
+
+function triggerPoint(p) {
+    speakTextSystem(p.text);
+    map.geoObjects.remove(p.placemark);
+    points.shift();
+    rebuildRoute();
+}
+
+async function loadGistFiles() {
+    const url = `https://api.github.com/gists/7d43c5ede26775934e66792a12fe656d`;
+    try {
+        const res = await fetch(url);
+        const gist = await res.json();
+        els.gistSelect.innerHTML = '<option value="">-- Выберите маршрут --</option>';
+        for (let name in gist.files) {
+            if (name.toLowerCase().endsWith('.json')) {
+                const opt = doc.createElement('option');
+                opt.value = gist.files[name].raw_url;
+                opt.textContent = name.replace(/\.json$/i,'');
+                els.gistSelect.appendChild(opt);
             }
-            window.addEventListener('resize', resizeCanvas);
-            resizeCanvas();
-
-            // Переключение режима
-            toggleBtn.onclick = () => {
-                isDrawingMode = !isDrawingMode;
-                canvas.classList.toggle('active', isDrawingMode);
-                toggleBtn.classList.toggle('active', isDrawingMode);
-                instructions.classList.toggle('visible', isDrawingMode);
-                
-                // Блокируем/разблокируем карту
-                if (isDrawingMode) {
-                    map.behaviors.disable(['drag', 'scrollZoom', 'multiTouch']);
-                } else {
-                    map.behaviors.enable(['drag', 'scrollZoom', 'multiTouch']);
-                }
-            };
-
-            // Логика свободного рисования
-            const startPosition = (e) => {
-                if (!isDrawingMode) return;
-                isDrawing = true;
-                currentPath = [];
-                const pos = getPos(e);
-                ctx.beginPath();
-                ctx.moveTo(pos.x, pos.y);
-                currentPath.push(map.options.get('projection').fromGlobalPixels(
-                    map.converter.pageToGlobal([pos.x, pos.y]),
-                    map.getZoom()
-                ));
-            };
-
-            const draw = (e) => {
-                if (!isDrawing || !isDrawingMode) return;
-                const pos = getPos(e);
-                
-                ctx.lineWidth = 4;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.strokeStyle = colorInput.value;
-
-                ctx.lineTo(pos.x, pos.y);
-                ctx.stroke();
-
-                // Собираем координаты для переноса на карту
-                const coords = map.options.get('projection').fromGlobalPixels(
-                    map.converter.pageToGlobal([pos.x, pos.y]),
-                    map.getZoom()
-                );
-                currentPath.push(coords);
-            };
-
-            const stopPosition = () => {
-                if (!isDrawing) return;
-                isDrawing = false;
-                ctx.closePath();
-                
-                // Переносим рисунок с канваса на карту как постоянный объект
-                if (currentPath.length > 1) {
-                    const polyline = new ymaps.Polyline(currentPath, {}, {
-                        strokeColor: colorInput.value,
-                        strokeWidth: 4,
-                        strokeOpacity: 0.8
-                    });
-                    map.geoObjects.add(polyline);
-                    drawnLayers.push(polyline);
-                }
-                
-                // Очищаем временный холст, так как линия теперь на карте
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-            };
-
-            function getPos(e) {
-                const rect = canvas.getBoundingClientRect();
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                return {
-                    x: clientX - rect.left,
-                    y: clientY - rect.top
-                };
-            }
-
-            // События тача (iPad) и мыши
-            canvas.addEventListener('mousedown', startPosition);
-            canvas.addEventListener('mousemove', draw);
-            window.addEventListener('mouseup', stopPosition);
-
-            canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startPosition(e); });
-            canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e); });
-            canvas.addEventListener('touchend', stopPosition);
-
-            // Очистка
-            clearBtn.onclick = () => {
-                map.geoObjects.removeAll();
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-            };
         }
-    </script>
+    } catch (e) {
+        els.gistSelect.innerHTML = '<option value="">Ошибка сети</option>';
+    }
+}
+
+els.gistSelect.onchange = async () => {
+    if (!els.gistSelect.value) return;
+    try {
+        const r = await fetch(els.gistSelect.value);
+        processRouteData(await r.json());
+    } catch(e) { alert('Ошибка загрузки'); }
+};
+
+function processRouteData(data) {
+    points = data.map((p, i) => ({
+        id: i + 1,
+        coords: [p.lat, p.lon],
+        azimuth: p.azimuth,
+        text: p.command,
+        color: p.color || 'blue'
+    }));
+    rebuildRoute();
+}
+
+function rebuildRoute() {
+    if (!map) return;
+    
+    map.geoObjects.removeAll();
+    map.geoObjects.add(userPlacemark);
+    els.targets.innerHTML = '';
+
+    points.forEach((p, i) => {
+        const isActive = i === 0;
+        p.placemark = new ymaps.Placemark(p.coords, 
+            { balloonContent: p.text },
+            {
+                iconLayout: 'default#image',
+                iconImageHref: getArrowSVG(p.azimuth, p.color, p.id, 1, isActive),
+                iconImageSize: [40, 40],
+                iconImageOffset: [-20, -20]
+            }
+        );
+
+        map.geoObjects.add(p.placemark);
+
+        const d = doc.createElement('div');
+        d.className = isActive ? 'active' : '';
+        d.textContent = `${p.id}. ${p.text}`;
+        d.onclick = () => { 
+            points = points.slice(i); 
+            rebuildRoute(); 
+        };
+        els.targets.appendChild(d);
+    });
+
+    if (points.length) {
+        updateInfo(lastCoords, lastSpeed, lastAzimuth);
+    } else {
+        els.info.textContent = 'Маршрут завершен';
+    }
+}
+
+function getDistance(lat1, lon1, lat2, lon2) {
+    const dLat = (lat2 - lat1) * DEG_TO_RAD;
+    const dLon = (lon2 - lon1) * DEG_TO_RAD;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * DEG_TO_RAD) * Math.cos(lat2 * DEG_TO_RAD) * Math.sin(dLon/2) * Math.sin(dLon/2);
+    return R_EARTH * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+</script>
 </body>
 </html>
