@@ -2,336 +2,244 @@
 <html lang="ru">
 <head>
     <meta charset="utf-8">
-    <title>Навигация</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <script src="https://api-maps.yandex.ru/2.1/?apikey=ВАШ_API_КЛЮЧ&lang=ru_RU"></script>
+    <title>Редактор маршрутов</title>
+    <script src="https://api-maps.yandex.ru/2.1/?apikey=YANDEX_API_KEY&lang=ru_RU"></script>
     <style>
-        html, body { margin:0; height:100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; overflow: hidden; }
-        #map { width:100%; height:100%; background: #000; }
-        #start{position:absolute;inset:0;z-index:100;background:#000;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer; text-align: center; padding: 20px;}
+        body, html { margin: 0; height: 100%; font-family: 'Inter', Arial, sans-serif; overflow: hidden; }
+        #map { position: absolute; inset: 0; }
         
-        .map-btn {
-            position:absolute;
-            z-index:16;
-            width:46px;
-            height:46px;
-            background:#fff;
-            border:none;
-            border-radius:12px;
-            font-size:22px;
-            box-shadow:0 4px 12px rgba(0,0,0,0.15);
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            cursor:pointer;
-            -webkit-tap-highlight-color: transparent;
+        #panel { 
+            position: absolute; top: 10px; right: 10px; width: 300px; z-index: 1000;
+            background: rgba(255,255,255,0.9); padding: 15px; border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); backdrop-filter: blur(10px);
+            transition: transform 0.3s ease, opacity 0.3s ease;
         }
-        #togglePanelBtn { top:15px; left:15px; }
-        #toggleAutoCenter { top:15px; right:15px; }
+        #panel.collapsed { transform: translateX(320px); opacity: 0; pointer-events: none; }
         
-        #toggleAutoCenter svg { width: 26px; height: 26px; fill: #666; }
-        #toggleAutoCenter.on svg { fill: #007bff; }
+        #togglePanel {
+            position: absolute; top: 10px; right: 10px; z-index: 1001;
+            width: 40px; height: 40px; border-radius: 8px; border: none;
+            background: #2f80ed; color: white; font-size: 20px; cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
 
-        #panel{position:absolute;top:75px;left:15px;z-index:15;width:calc(100% - 30px);max-width:320px;max-height:60%;background:rgba(255,255,255,0.98);padding:15px;border-radius:12px;display:none;overflow-y:auto;box-shadow:0 4px 20px rgba(0,0,0,0.2); -webkit-overflow-scrolling: touch;}
-        #panel select, #panel input, #panel button {width:100%;margin-top:10px;padding:12px;box-sizing:border-box; border: 1px solid #ddd; border-radius: 8px; font-size: 16px;}
-        #panel label{font-size:12px;font-weight:bold;display:block;margin-top:10px; color: #666;}
-        #targets div{padding:12px;border-bottom:1px solid #eee;cursor:pointer;font-size:15px; color: #333;}
-        #targets div.active{background:#e3f2fd;font-weight:bold; border-left: 4px solid #007bff;}
-        #info{position:absolute;bottom:0;left:0;right:0;background:rgba(255,255,255,0.95);padding:15px 10px env(safe-area-inset-bottom);font-weight:bold;z-index:15;font-size:14px;text-align:center;border-top:1px solid #ddd; backdrop-filter: blur(5px);}
-        hr{margin:15px 0;border:0;border-top:1px solid #eee}
+        .info { background: #f4f4f7; padding: 10px; border-radius: 8px; margin-bottom: 8px; font-size: 13px; color: #666; line-height: 1.4; }
+        .row { display: flex; gap: 8px; margin-bottom: 8px; }
+        button { flex: 1; cursor: pointer; border: none; border-radius: 8px; padding: 10px; background: #2f80ed; color: white; font-weight: bold; }
+        button.danger { background: #e74c3c; }
+        button.secondary { background: #6c757d; }
+        
+        textarea { 
+            flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 8px; 
+            outline: none; font-size: 14px; font-family: inherit; resize: none; 
+            overflow: hidden; min-height: 40px; width: 100%;
+        }
+        
+        #palette { display: flex; gap: 6px; margin-top: 5px; }
+        #palette div { width: 25px; height: 25px; border-radius: 5px; cursor: pointer; border: 1px solid #ccc; }
+        .point-id-label { color: #2f80ed; font-weight: bold; margin-bottom: 4px; display: block; }
+
+        .cmd-bubble {
+            position: relative; background: #ffffff; border: 2px solid #333;
+            border-radius: 6px; padding: 4px 8px; font-size: 12px;
+            font-weight: bold; color: #000; box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
+            display: inline-block; min-width: 20px; max-width: 250px; 
+            word-wrap: break-word; white-space: normal; line-height: 1.3;
+        }
     </style>
 </head>
 <body>
 
-<div id="start">Нажмите для запуска<br><small style="font-size: 14px; opacity: 0.7; margin-top: 10px; display: block;">Это необходимо для активации звука и GPS</small></div>
-<button id="togglePanelBtn" class="map-btn">☰</button>
-<button id="toggleAutoCenter" class="map-btn on" title="Автоцентрирование">
-    <svg viewBox="0 0 24 24">
-        <path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z" />
-    </svg>
-</button>
+<div id="map"></div>
+<button id="togglePanel" onclick="document.getElementById('panel').classList.toggle('collapsed')">≡</button>
 
 <div id="panel">
-    <label>Маршрут с Gist</label>
-    <select id="gistSelect"><option value="">-- Загрузка... --</option></select>
-    <label>Дистанция триггера (м)</label>
-    <input id="distanceTrigger" type="number" value="20" inputmode="numeric">
-    <hr>
-    <div id="targets"></div>
+    <div class="row">
+        <button onclick="rotate(-10)">⟲ -10°</button>
+        <button onclick="rotate(10)">⟳ +10°</button>
+    </div>
+    <div class="row">
+        <textarea id="cmdInput" placeholder="Команда точки..." oninput="autoResize(this)" onblur="saveCmd()"></textarea>
+    </div>
+    <div class="info" id="coordsInfo">Выберите точку на карте</div>
+    <div class="row" style="margin-bottom: 12px;"><div id="palette"></div></div>
+    <button class="secondary" style="width:100%; margin-bottom: 8px;" onclick="toggleLabels()">Показать/скрыть команды</button>
+    <button class="danger" style="width:100%" onclick="removePoint()">Удалить точку</button>
+    <div class="row" style="margin-top:10px; border-top: 1px solid #eee; padding-top: 10px;">
+        <button onclick="exportJSON()" style="background:#555">Экспорт</button>
+        <button onclick="importJSON()" style="background:#555">Импорт</button>
+    </div>
 </div>
 
-<div id="info">Ожидание GPS…</div>
-<div id="map"></div>
-
 <script>
-/* ==== CONSTANTS AND VARIABLES ==== */
-const DEG_TO_RAD = Math.PI / 180;
-const RAD_TO_DEG = 180 / Math.PI;
-const R_EARTH = 6371000;
-const AZ_AVG_LIMIT = 2;
+let map, points = [], current = null, showLabels = false, userMarker = null;
+const COLOR_PALETTE = ['Gold', 'blue', 'red', 'Lime', 'Fuchsia', 'purple', 'Silver', 'Aqua'];
 
-let map, userPlacemark, points = [], autoCenter = true, wakeLock = null;
-let azHistory = [], lastAzimuth = 0, lastSpeed = 0, lastCoords = [0, 0];
-const svgCache = new Map();
+ymaps.ready(() => {
+    map = new ymaps.Map("map", { 
+        center: [56.3399, 43.9332], 
+        zoom: 18, 
+        type: 'yandex#satellite', 
+        controls: [] 
+    });
+    
+    map.events.add('click', e => addPoint(e.get('coords')));
+    
+    const pal = document.getElementById('palette');
+    COLOR_PALETTE.forEach(c => {
+        const d = document.createElement('div');
+        d.style.background = c;
+        d.onclick = () => { if(current) { current.color = c; updateMarkers(); } };
+        pal.appendChild(d);
+    });
 
-/* ==== DOM ELEMENTS ==== */
-const doc = document;
-const els = {
-    start: doc.getElementById('start'),
-    panel: doc.getElementById('panel'),
-    togglePanelBtn: doc.getElementById('togglePanelBtn'),
-    targets: doc.getElementById('targets'),
-    info: doc.getElementById('info'),
-    distanceTrigger: doc.getElementById('distanceTrigger'),
-    toggleAutoCenter: doc.getElementById('toggleAutoCenter'),
-    gistSelect: doc.getElementById('gistSelect')
-};
+    initLocationTracking();
+});
 
-/* ==== INITIALIZATION ==== */
-els.start.onclick = async () => {
-    els.start.remove();
-    
-    // Warm up the audio on iOS
-    const dummy = new SpeechSynthesisUtterance("");
-    window.speechSynthesis.speak(dummy);
-    
-    speakTextSystem("Система навигации готова");
-    
-    if ('wakeLock' in navigator) {
-        try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){}
+// Отслеживание местоположения
+function initLocationTracking() {
+    if ("geolocation" in navigator) {
+        navigator.geolocation.watchPosition((position) => {
+            const coords = [position.coords.latitude, position.coords.longitude];
+            if (!userMarker) {
+                userMarker = new ymaps.Placemark(coords, {}, {
+                    preset: 'islands#geolocationIcon',
+                    zIndex: 2000
+                });
+                map.geoObjects.add(userMarker);
+            } else {
+                userMarker.geometry.setCoordinates(coords);
+            }
+        }, err => console.log(err), { enableHighAccuracy: true });
     }
-    initMap();
-    loadGistFiles();
-};
-
-els.togglePanelBtn.onclick = () => {
-    const isShown = els.panel.style.display === 'block';
-    els.panel.style.display = isShown ? 'none' : 'block';
-};
-
-els.toggleAutoCenter.onclick = () => {
-    autoCenter = !autoCenter;
-    els.toggleAutoCenter.classList.toggle('on', autoCenter);
-};
-
-/* ==== ADVANCED SYSTEM TTS (iOS Optimized) ==== */
-function speakTextSystem(text) {
-    if (!text) return;
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    const voices = window.speechSynthesis.getVoices();
-
-    // iOS/Safari specific strategy:
-    // 1. Look for "Siri" Russian voices (Milena, Yuri) - they are neural and high quality
-    // 2. Look for "Enhanced" or "Premium" Russian voices
-    // 3. Look for "Google" (if in Chrome on iOS)
-    // 4. Default Russian
-    
-    let preferredVoice = voices.find(v => v.lang.includes('ru') && v.name.includes('Siri')) ||
-                         voices.find(v => v.lang.includes('ru') && (v.name.includes('Enhanced') || v.name.includes('Premium'))) ||
-                         voices.find(v => v.lang.includes('ru') && v.name.includes('Google')) ||
-                         voices.find(v => v.lang.includes('ru') && v.name.includes('Yuri')) || // Yuri is a good male voice on iOS
-                         voices.find(v => v.lang.includes('ru'));
-
-    if (preferredVoice) {
-        utterance.voice = preferredVoice;
-    }
-    
-    utterance.lang = 'ru-RU';
-    utterance.rate = 1.0; 
-    utterance.pitch = 1.0;
-
-    // Critical for iOS: Always cancel current before starting new
-    window.speechSynthesis.cancel();
-    
-    // Small timeout helps Safari process the cancel/speak sequence
-    setTimeout(() => {
-        window.speechSynthesis.speak(utterance);
-    }, 50);
 }
 
-// Warm up voices
-window.speechSynthesis.getVoices();
-if (speechSynthesis.onvoiceschanged !== undefined) {
-    speechSynthesis.onvoiceschanged = () => {
-        window.speechSynthesis.getVoices();
+function autoResize(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
+
+function getIcon(azimuth, colorName, isSelected, id) {
+    const fill = colorName || 'Gold';
+    const stroke = isSelected ? '#2ecc71' : '#000';
+    const sWidth = isSelected ? 3 : 1.5;
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
+            <g transform="rotate(${azimuth},20,20)">
+                <polygon points="20,2 35,35 20,26 5,35" fill="${fill}" stroke="${stroke}" stroke-width="${sWidth}"/>
+            </g>
+            <circle cx="20" cy="20" r="9" fill="white" stroke="${stroke}" stroke-width="1"/>
+            <text x="20" y="24" font-size="12" font-family="Arial, sans-serif" font-weight="900" text-anchor="middle" fill="black">${id}</text>
+        </svg>`
+    );
+}
+
+function addPoint(coords) {
+    document.getElementById('panel').classList.remove('collapsed');
+    const p = {
+        id: points.length + 1,
+        lat: coords[0].toFixed(6), lon: coords[1].toFixed(6),
+        azimuth: 0, color: 'Gold', command: '', pm: null
     };
-}
 
-/* ==== MAP LOGIC ==== */
-function initMap(){
-    ymaps.ready(() => {
-        map = new ymaps.Map("map", {
-            center: [0,0], zoom: 18, type: 'yandex#satellite', controls: []
-        });
-
-        userPlacemark = new ymaps.Placemark([0,0], {}, {
-            iconLayout: 'default#image',
-            iconImageHref: getArrowSVG(0, 'red'),
-            iconImageSize: [40, 40],
-            iconImageOffset: [-20, -20]
-        });
-
-        map.geoObjects.add(userPlacemark);
-        navigator.geolocation.watchPosition(onGPS, null, {
-            enableHighAccuracy: true, maximumAge: 0, timeout: 5000
-        });
+    p.pm = new ymaps.Placemark(coords, { iconContent: "" }, {
+        iconLayout: 'default#imageWithContent', 
+        iconImageSize: [40, 40], iconImageOffset: [-20, -20], draggable: true,
+        iconImageHref: getIcon(0, 'Gold', false, p.id),
+        iconContentOffset: [25, -10],
+        iconContentLayout: ymaps.templateLayoutFactory.createClass(
+            '{% if properties.iconContent %}<div class="cmd-bubble">$[properties.iconContent]</div>{% endif %}'
+        )
     });
+
+    p.pm.events.add('click', () => selectPoint(p));
+    p.pm.events.add('dragend', () => {
+        const c = p.pm.geometry.getCoordinates();
+        p.lat = c[0].toFixed(6); p.lon = c[1].toFixed(6);
+        updateUI();
+    });
+
+    map.geoObjects.add(p.pm);
+    points.push(p);
+    selectPoint(p);
 }
 
-function onGPS(p){
-    const coords = [p.coords.latitude, p.coords.longitude];
-    lastCoords = coords;
-    const speed = p.coords.speed != null ? (p.coords.speed * 3.6) : 0;
-    lastSpeed = speed.toFixed(1);
-
-    if (p.coords.heading !== null && !isNaN(p.coords.heading) && speed >= 3) {
-        azHistory.push(p.coords.heading);
-        while (azHistory.length > AZ_AVG_LIMIT) azHistory.shift();
-        lastAzimuth = averageAngle(azHistory);
-    }
-
-    userPlacemark.geometry.setCoordinates(coords);
-    userPlacemark.options.set('iconImageHref', getArrowSVG(lastAzimuth, 'red'));
-
-    if (autoCenter) map.setCenter(coords);
-    updateInfo(coords, lastSpeed, lastAzimuth);
+function selectPoint(p) {
+    saveCmd();
+    current = p;
+    const input = document.getElementById('cmdInput');
+    input.value = p.command;
+    autoResize(input);
+    updateMarkers();
+    updateUI();
 }
 
-function averageAngle(arr){
-    let x = 0, y = 0;
-    for (let i = 0; i < arr.length; i++){
-        const r = arr[i] * DEG_TO_RAD;
-        x += Math.cos(r);
-        y += Math.sin(r);
-    }
-    return (Math.atan2(y, x) * RAD_TO_DEG + 360) % 360;
+function saveCmd() { 
+    if (current) { 
+        current.command = document.getElementById('cmdInput').value.trim(); 
+        if(showLabels) current.pm.properties.set('iconContent', current.command);
+        updateUI(); 
+    } 
 }
 
-function getArrowSVG(a, color, num = '', opacity = 1, highlight = false) {
-    const key = `${Math.round(a)}|${color}|${num}|${opacity}|${highlight}`;
-    if (svgCache.has(key)) return svgCache.get(key);
-
-    const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
-        <g transform="rotate(${a},20,20)">
-            <polygon points="20,2 30,32 20,26 10,32" fill="${color}" fill-opacity="${opacity}" stroke="${highlight ? '#7CFC00' : '#000'}" stroke-width="${highlight ? 2 : 1}" stroke-linejoin="round"/>
-        </g>
-        ${num ? `<text x="20" y="22" font-size="14" font-family="Arial" text-anchor="middle" fill="#fff" font-weight="bold" stroke="#000" stroke-width="0.5">${num}</text>` : ''}
-    </svg>`;
-    
-    const res = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-    if (svgCache.size > 200) svgCache.clear();
-    svgCache.set(key, res);
-    return res;
+function toggleLabels() {
+    showLabels = !showLabels;
+    points.forEach(p => p.pm.properties.set('iconContent', showLabels ? p.command : ""));
 }
 
-function updateInfo(pos, speed, az) {
-    if (!points.length) {
-        els.info.textContent = 'Маршрут пуст';
-        return;
-    }
-
-    const p = points[0];
-    const dist = Math.round(getDistance(pos[0], pos[1], p.coords[0], p.coords[1]));
-    const diff = Math.abs(((Math.round(az) - p.azimuth + 540) % 360) - 180);
-
-    els.info.textContent = `№${p.id} | ${p.text} | Д: ${dist}м | Аз:${Math.round(az)}° | Цель:${p.azimuth}° | ${speed} км/ч`;
-
-    if (dist <= (+els.distanceTrigger.value || 20) && diff <= 45) {
-        triggerPoint(p);
-    }
+function reindexPoints() {
+    points.forEach((p, index) => p.id = index + 1);
+    updateMarkers();
+    updateUI();
 }
 
-function triggerPoint(p) {
-    speakTextSystem(p.text);
-    map.geoObjects.remove(p.placemark);
-    points.shift();
-    rebuildRoute();
+function updateMarkers() {
+    points.forEach(p => p.pm.options.set('iconImageHref', getIcon(p.azimuth, p.color, p === current, p.id)));
 }
 
-async function loadGistFiles() {
-    const url = `https://api.github.com/gists/7d43c5ede26775934e66792a12fe656d`;
-    try {
-        const res = await fetch(url);
-        const gist = await res.json();
-        els.gistSelect.innerHTML = '<option value="">-- Выберите маршрут --</option>';
-        for (let name in gist.files) {
-            if (name.toLowerCase().endsWith('.json')) {
-                const opt = doc.createElement('option');
-                opt.value = gist.files[name].raw_url;
-                opt.textContent = name.replace(/\.json$/i,'');
-                els.gistSelect.appendChild(opt);
-            }
-        }
-    } catch (e) {
-        els.gistSelect.innerHTML = '<option value="">Ошибка сети</option>';
-    }
+function updateUI() {
+    const info = document.getElementById('coordsInfo');
+    if (!current) { info.innerText = "Выберите точку"; return; }
+    info.innerHTML = `<span class="point-id-label">ID: ${current.id}</span>${current.lat}, ${current.lon}<br>Угол: ${current.azimuth}°`;
 }
 
-els.gistSelect.onchange = async () => {
-    if (!els.gistSelect.value) return;
-    try {
-        const r = await fetch(els.gistSelect.value);
-        processRouteData(await r.json());
-    } catch(e) { alert('Ошибка загрузки'); }
-};
-
-function processRouteData(data) {
-    points = data.map((p, i) => ({
-        id: i + 1,
-        coords: [p.lat, p.lon],
-        azimuth: p.azimuth,
-        text: p.command,
-        color: p.color || 'blue'
-    }));
-    rebuildRoute();
+function rotate(deg) {
+    if (!current) return;
+    current.azimuth = (current.azimuth + deg + 360) % 360;
+    updateMarkers(); updateUI();
 }
 
-function rebuildRoute() {
-    if (!map) return;
-    
-    map.geoObjects.removeAll();
-    map.geoObjects.add(userPlacemark);
-    els.targets.innerHTML = '';
+function removePoint() {
+    if (!current) return;
+    map.geoObjects.remove(current.pm);
+    points = points.filter(p => p !== current);
+    current = null;
+    reindexPoints();
+}
 
-    points.forEach((p, i) => {
-        const isActive = i === 0;
-        p.placemark = new ymaps.Placemark(p.coords, 
-            { balloonContent: p.text },
-            {
-                iconLayout: 'default#image',
-                iconImageHref: getArrowSVG(p.azimuth, p.color, p.id, 1, isActive),
-                iconImageSize: [40, 40],
-                iconImageOffset: [-20, -20]
-            }
-        );
+function exportJSON() {
+    saveCmd();
+    const data = points.map(p => ({ id: p.id, lat: p.lat, lon: p.lon, azimuth: p.azimuth, color: p.color, command: p.command }));
+    const b = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'route.json'; a.click();
+}
 
-        map.geoObjects.add(p.placemark);
-
-        const d = doc.createElement('div');
-        d.className = isActive ? 'active' : '';
-        d.textContent = `${p.id}. ${p.text}`;
-        d.onclick = () => { 
-            points = points.slice(i); 
-            rebuildRoute(); 
+function importJSON() {
+    const input = document.createElement('input'); input.type = 'file';
+    input.onchange = e => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const data = JSON.parse(reader.result);
+            points.forEach(p => map.geoObjects.remove(p.pm));
+            points = [];
+            data.forEach(d => {
+                addPoint([parseFloat(d.lat), parseFloat(d.lon)]);
+                const last = points[points.length - 1];
+                last.azimuth = d.azimuth || 0; last.color = d.color || 'Gold'; last.command = d.command || '';
+            });
+            reindexPoints();
+            if(showLabels) { showLabels = false; toggleLabels(); }
         };
-        els.targets.appendChild(d);
-    });
-
-    if (points.length) {
-        updateInfo(lastCoords, lastSpeed, lastAzimuth);
-    } else {
-        els.info.textContent = 'Маршрут завершен';
-    }
-}
-
-function getDistance(lat1, lon1, lat2, lon2) {
-    const dLat = (lat2 - lat1) * DEG_TO_RAD;
-    const dLon = (lon2 - lon1) * DEG_TO_RAD;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * DEG_TO_RAD) * Math.cos(lat2 * DEG_TO_RAD) * Math.sin(dLon/2) * Math.sin(dLon/2);
-    return R_EARTH * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        reader.readAsText(e.target.files[0]);
+    };
+    input.click();
 }
 </script>
 </body>
