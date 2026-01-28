@@ -72,22 +72,30 @@
     <div class="row">
         <textarea id="cmdInput" placeholder="Команда точки..." oninput="autoResize(this)" onblur="saveCmd()"></textarea>
     </div>
-    <div class="info" id="coordsInfo">Выберите точку на карте</div>
+    <div class="info" id="coordsInfo">Определяем местоположение...</div>
     <div class="row" style="margin-bottom: 5px;"><div id="palette"></div></div>
     <div class="row">
-        <button class="secondary" onclick="toggleLabels()" title="Показать/скрыть команды">👁️</button>
-        <button class="danger" onclick="removePoint()" title="Удалить точку">🗑️</button>
-        <button class="icon-btn" onclick="exportJSON()" title="Экспорт">💾</button>
-        <button class="icon-btn" onclick="importJSON()" title="Импорт">📂</button>
+        <button class="secondary" onclick="toggleLabels()" title="👁️">👁️</button>
+        <button class="danger" onclick="removePoint()" title="🗑️">🗑️</button>
+        <button class="icon-btn" onclick="exportJSON()" title="💾">💾</button>
+        <button class="icon-btn" onclick="importJSON()" title="📂">📂</button>
     </div>
 </div>
 
 <script>
 let map, points = [], current = null, showLabels = false, userMarker = null;
 const COLOR_PALETTE = ['Gold', 'blue', 'red', 'Lime', 'Fuchsia', 'purple', 'Silver', 'Aqua'];
+const DEFAULT_CENTER = [56.3399, 43.9332]; // Запасной вариант
 
 ymaps.ready(() => {
-    map = new ymaps.Map("map", { center: [56.3399, 43.9332], zoom: 18, type: 'yandex#satellite', controls: [] });
+    // Сначала создаем карту на дефолтных координатах
+    map = new ymaps.Map("map", { 
+        center: DEFAULT_CENTER, 
+        zoom: 18, 
+        type: 'yandex#satellite', 
+        controls: [] 
+    });
+    
     map.events.add('click', e => addPoint(e.get('coords')));
     
     const pal = document.getElementById('palette');
@@ -99,17 +107,31 @@ ymaps.ready(() => {
         pal.appendChild(d);
     });
 
-    initLocationTracking();
+    // Попытка центрировать по GPS при загрузке и запуск трекинга
+    startInitialGeolocation();
 });
 
-function initLocationTracking() {
+function startInitialGeolocation() {
     if ("geolocation" in navigator) {
+        // Одноразовый запрос для центрирования
+        navigator.geolocation.getCurrentPosition((position) => {
+            const coords = [position.coords.latitude, position.coords.longitude];
+            map.setCenter(coords);
+            document.getElementById('coordsInfo').innerText = "Нажмите на карту для точки";
+        }, (err) => {
+            console.log("Доступ к GPS отклонен или ошибка", err);
+            document.getElementById('coordsInfo').innerText = "GPS недоступен. Выберите точку.";
+        });
+
+        // Постоянное отслеживание (без автоцентрации)
         navigator.geolocation.watchPosition((position) => {
             const coords = [position.coords.latitude, position.coords.longitude];
             if (!userMarker) {
                 userMarker = new ymaps.Placemark(coords, {}, { preset: 'islands#geolocationIcon', zIndex: 2000 });
                 map.geoObjects.add(userMarker);
-            } else userMarker.geometry.setCoordinates(coords);
+            } else {
+                userMarker.geometry.setCoordinates(coords);
+            }
         }, null, { enableHighAccuracy: true });
     }
 }
