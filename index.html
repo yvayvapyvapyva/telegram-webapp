@@ -9,7 +9,6 @@
         body, html { margin: 0; height: 100%; font-family: 'Inter', Arial, sans-serif; overflow: hidden; }
         #map { position: absolute; inset: 0; }
         
-        /* Панель с адаптацией */
         #panel { 
             position: absolute; top: 10px; right: 10px; width: 300px; z-index: 1000;
             background: rgba(255,255,255,0.9); padding: 15px; border-radius: 12px;
@@ -17,14 +16,12 @@
             transition: transform 0.3s ease, opacity 0.3s ease;
         }
         
-        /* На мобильных устройствах панель занимает почти всю ширину */
         @media (max-width: 480px) {
             #panel { width: auto; left: 10px; right: 10px; }
         }
 
         #panel.collapsed { transform: translateY(-150%); opacity: 0; pointer-events: none; }
         
-        /* Удобная кнопка для смартфона снизу */
         #togglePanel {
             position: absolute; bottom: 25px; right: 20px; z-index: 1001;
             width: 50px; height: 50px; border-radius: 25px; border: none;
@@ -32,26 +29,26 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;
         }
 
-        .info { background: #f4f4f7; padding: 10px; border-radius: 8px; margin-bottom: 8px; font-size: 13px; color: #666; line-height: 1.4; }
+        .info { background: #f4f4f7; padding: 10px; border-radius: 8px; margin-bottom: 8px; font-size: 12px; color: #444; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .row { display: flex; gap: 8px; margin-bottom: 8px; }
         
         button { 
-            flex: 1; cursor: pointer; border: none; border-radius: 8px; padding: 12px 5px; 
+            flex: 1; cursor: pointer; border: none; border-radius: 8px; padding: 10px 5px; 
             background: #2f80ed; color: white; font-weight: bold; font-family: inherit;
-            min-height: 44px; /* Размер под палец */
+            min-height: 44px; display: flex; align-items: center; justify-content: center;
         }
         button.danger { background: #e74c3c; }
         button.secondary { background: #6c757d; }
+        button.icon-btn { font-size: 20px; background: #555; }
         
         textarea { 
             flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 8px; 
-            outline: none; font-size: 16px; /* 16px предотвращает зум на iPhone */
-            font-family: inherit; resize: none; overflow: hidden; min-height: 40px; width: 100%;
+            outline: none; font-size: 16px; font-family: inherit; resize: none; overflow: hidden; min-height: 40px; width: 100%;
         }
         
-        #palette { display: flex; gap: 6px; margin-top: 5px; overflow-x: auto; padding-bottom: 5px; }
-        #palette div { min-width: 25px; height: 25px; border-radius: 5px; cursor: pointer; border: 1px solid #ccc; flex-shrink: 0; }
-        .point-id-label { color: #2f80ed; font-weight: bold; margin-bottom: 4px; display: block; }
+        #palette { display: flex; gap: 6px; margin-top: 5px; overflow-x: auto; padding: 5px 2px; }
+        #palette div { min-width: 28px; height: 28px; border-radius: 6px; cursor: pointer; border: 1px solid #ccc; flex-shrink: 0; box-sizing: border-box; }
+        #palette div.active { border: 3px solid #000; }
 
         .cmd-bubble {
             position: relative; background: #ffffff; border: 2px solid #333;
@@ -76,12 +73,12 @@
         <textarea id="cmdInput" placeholder="Команда точки..." oninput="autoResize(this)" onblur="saveCmd()"></textarea>
     </div>
     <div class="info" id="coordsInfo">Выберите точку на карте</div>
-    <div class="row" style="margin-bottom: 12px;"><div id="palette"></div></div>
-    <button class="secondary" style="width:100%; margin-bottom: 8px;" onclick="toggleLabels()">Показать/скрыть команды</button>
-    <button class="danger" style="width:100%" onclick="removePoint()">Удалить точку</button>
-    <div class="row" style="margin-top:10px; border-top: 1px solid #eee; padding-top: 10px;">
-        <button onclick="exportJSON()" style="background:#555">Экспорт</button>
-        <button onclick="importJSON()" style="background:#555">Импорт</button>
+    <div class="row" style="margin-bottom: 5px;"><div id="palette"></div></div>
+    <div class="row">
+        <button class="secondary" onclick="toggleLabels()" title="Показать/скрыть команды">👁️</button>
+        <button class="danger" onclick="removePoint()" title="Удалить точку">🗑️</button>
+        <button class="icon-btn" onclick="exportJSON()" title="Экспорт">💾</button>
+        <button class="icon-btn" onclick="importJSON()" title="Импорт">📂</button>
     </div>
 </div>
 
@@ -90,20 +87,15 @@ let map, points = [], current = null, showLabels = false, userMarker = null;
 const COLOR_PALETTE = ['Gold', 'blue', 'red', 'Lime', 'Fuchsia', 'purple', 'Silver', 'Aqua'];
 
 ymaps.ready(() => {
-    map = new ymaps.Map("map", { 
-        center: [56.3399, 43.9332], 
-        zoom: 18, 
-        type: 'yandex#satellite', 
-        controls: [] 
-    });
-    
+    map = new ymaps.Map("map", { center: [56.3399, 43.9332], zoom: 18, type: 'yandex#satellite', controls: [] });
     map.events.add('click', e => addPoint(e.get('coords')));
     
     const pal = document.getElementById('palette');
     COLOR_PALETTE.forEach(c => {
         const d = document.createElement('div');
         d.style.background = c;
-        d.onclick = () => { if(current) { current.color = c; updateMarkers(); } };
+        d.dataset.color = c;
+        d.onclick = () => { if(current) { current.color = c; updateMarkers(); updatePaletteUI(); } };
         pal.appendChild(d);
     });
 
@@ -115,14 +107,9 @@ function initLocationTracking() {
         navigator.geolocation.watchPosition((position) => {
             const coords = [position.coords.latitude, position.coords.longitude];
             if (!userMarker) {
-                userMarker = new ymaps.Placemark(coords, {}, {
-                    preset: 'islands#geolocationIcon',
-                    zIndex: 2000
-                });
+                userMarker = new ymaps.Placemark(coords, {}, { preset: 'islands#geolocationIcon', zIndex: 2000 });
                 map.geoObjects.add(userMarker);
-            } else {
-                userMarker.geometry.setCoordinates(coords);
-            }
+            } else userMarker.geometry.setCoordinates(coords);
         }, null, { enableHighAccuracy: true });
     }
 }
@@ -132,14 +119,13 @@ function autoResize(el) { el.style.height = 'auto'; el.style.height = el.scrollH
 function getIcon(azimuth, colorName, isSelected, id) {
     const fill = colorName || 'Gold';
     const stroke = isSelected ? '#2ecc71' : '#000';
-    const sWidth = isSelected ? 3 : 1.5;
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(
         `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
             <g transform="rotate(${azimuth},20,20)">
-                <polygon points="20,2 35,35 20,26 5,35" fill="${fill}" stroke="${stroke}" stroke-width="${sWidth}"/>
+                <polygon points="20,2 35,35 20,26 5,35" fill="${fill}" stroke="${stroke}" stroke-width="${isSelected?3:1.5}"/>
             </g>
-            <circle cx="20" cy="20" r="9" fill="white" stroke="${stroke}" stroke-width="1"/>
-            <text x="20" y="24" font-size="12" font-family="Arial, sans-serif" font-weight="900" text-anchor="middle" fill="black">${id}</text>
+            <circle cx="20" cy="20" r="9" fill="white" stroke="${fill}" stroke-width="2"/>
+            <text x="20" y="24" font-size="11" font-family="Arial" font-weight="900" text-anchor="middle" fill="black">${id}</text>
         </svg>`
     );
 }
@@ -174,6 +160,13 @@ function addPoint(coords) {
     selectPoint(p);
 }
 
+function updatePaletteUI() {
+    const divs = document.querySelectorAll('#palette div');
+    divs.forEach(d => {
+        d.classList.toggle('active', current && d.dataset.color === current.color);
+    });
+}
+
 function selectPoint(p) {
     saveCmd();
     current = p;
@@ -182,13 +175,13 @@ function selectPoint(p) {
     autoResize(input);
     updateMarkers();
     updateUI();
+    updatePaletteUI();
 }
 
 function saveCmd() { 
     if (current) { 
         current.command = document.getElementById('cmdInput').value.trim(); 
         if(showLabels) current.pm.properties.set('iconContent', current.command);
-        updateUI(); 
     } 
 }
 
@@ -210,7 +203,7 @@ function updateMarkers() {
 function updateUI() {
     const info = document.getElementById('coordsInfo');
     if (!current) { info.innerText = "Выберите точку"; return; }
-    info.innerHTML = `<span class="point-id-label">ID: ${current.id}</span>${current.lat}, ${current.lon}<br>Угол: ${current.azimuth}°`;
+    info.innerHTML = `<b>ID:${current.id}</b> | ${current.lat}, ${current.lon} | <b>∠${current.azimuth}°</b>`;
 }
 
 function rotate(deg) {
@@ -225,6 +218,7 @@ function removePoint() {
     points = points.filter(p => p !== current);
     current = null;
     reindexPoints();
+    updatePaletteUI();
 }
 
 function exportJSON() {
@@ -248,7 +242,6 @@ function importJSON() {
                 last.azimuth = d.azimuth || 0; last.color = d.color || 'Gold'; last.command = d.command || '';
             });
             reindexPoints();
-            if(showLabels) { showLabels = false; toggleLabels(); }
         };
         reader.readAsText(e.target.files[0]);
     };
