@@ -8,21 +8,32 @@
     <style>
         body, html { margin: 0; height: 100%; font-family: 'Inter', Arial, sans-serif; overflow: hidden; }
         #map { position: absolute; inset: 0; }
+        
         #panel { 
             position: absolute; top: 10px; right: 10px; width: 300px; z-index: 1000;
             background: rgba(255,255,255,0.9); padding: 15px; border-radius: 12px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.2); backdrop-filter: blur(10px);
-            transition: transform 0.3s ease, opacity 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             max-height: 90vh; overflow-y: auto;
         }
+
+        /* Класс для скрытия панели */
+        #panel.collapsed {
+            transform: translateX(calc(100% + 20px));
+            opacity: 0;
+            pointer-events: none;
+        }
+        
         #togglePanel {
             position: absolute; bottom: 25px; right: 20px; z-index: 1001;
             width: 50px; height: 50px; border-radius: 25px; border: none;
             background: #2f80ed; color: white; font-size: 24px; cursor: pointer;
             box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;
         }
+
         .info { background: #f4f4f7; padding: 10px; border-radius: 8px; margin-bottom: 8px; font-size: 12px; color: #444; line-height: 1.2; }
         .row { display: flex; gap: 8px; margin-bottom: 8px; }
+        
         button { 
             flex: 1; cursor: pointer; border: none; border-radius: 8px; padding: 10px 5px; 
             background: #2f80ed; color: white; font-weight: bold; font-family: inherit;
@@ -32,12 +43,15 @@
         button.secondary { background: #6c757d; }
         button.add-btn { background: #28a745; max-width: 44px; font-size: 20px; }
         button.gh-btn { background: #24292e; font-size: 12px; } 
+        
         textarea, .gh-input, select { 
             flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 8px; 
             outline: none; font-size: 14px; font-family: inherit; width: 100%; box-sizing: border-box;
         }
+        
         #palette { display: flex; gap: 6px; margin-top: 5px; overflow-x: auto; padding: 5px 2px; }
         #palette div { min-width: 28px; height: 28px; border-radius: 6px; cursor: pointer; border: 1px solid #ccc; flex-shrink: 0; }
+
         .cmd-bubble {
             position: relative; background: #ffffff; border: 2px solid #333;
             border-radius: 6px; padding: 4px 8px; font-size: 12px;
@@ -89,7 +103,7 @@
 const GH_REPO = "yvayvapyvapyva/test";
 const GH_PATH = "roads";
 
-let map, points = [], current = null, showLabels = false, currentFileSha = null, selectedFilePath = null;
+let map, points = [], current = null, showLabels = false, currentFileSha = null, selectedFilePath = null, userMarker = null;
 const COLOR_PALETTE = ['Gold', 'blue', 'red', 'Lime', 'Fuchsia', 'purple', 'Silver', 'Aqua'];
 
 ymaps.ready(() => {
@@ -104,8 +118,24 @@ ymaps.ready(() => {
         pal.appendChild(d);
     });
 
+    startGeolocation();
     initApp();
 });
+
+function startGeolocation() {
+    if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition((position) => {
+            map.setCenter([position.coords.latitude, position.coords.longitude]);
+        });
+        navigator.geolocation.watchPosition((position) => {
+            const coords = [position.coords.latitude, position.coords.longitude];
+            if (!userMarker) {
+                userMarker = new ymaps.Placemark(coords, {}, { preset: 'islands#geolocationIcon', zIndex: 2000 });
+                map.geoObjects.add(userMarker);
+            } else userMarker.geometry.setCoordinates(coords);
+        }, null, { enableHighAccuracy: true });
+    }
+}
 
 function initApp() {
     const savedToken = localStorage.getItem('gh_token');
@@ -123,49 +153,30 @@ function saveToken(val) {
 async function createNewFile() {
     const token = document.getElementById('ghToken').value;
     if (!token) return alert("Введите токен!");
-    
-    let fileName = prompt("Введите имя нового файла (без .json):");
+    let fileName = prompt("Имя файла (без .json):");
     if (!fileName) return;
     if (!fileName.endsWith('.json')) fileName += '.json';
-    
     const fullPath = `${GH_PATH}/${fileName}`;
-    const initialData = btoa(unescape(encodeURIComponent(JSON.stringify([], null, 2))));
-
     try {
         const res = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${fullPath}`, {
             method: 'PUT',
-            headers: { 'Authorization': `token ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                message: "Create new route file",
-                content: initialData
-            })
+            headers: { 'Authorization': `token ${token}` },
+            body: JSON.stringify({ message: "New file", content: btoa("[]") })
         });
-
-        if (res.ok) {
-            alert("Файл создан!");
-            await listGitHubFiles(token);
-            document.getElementById('fileSelector').value = fullPath;
-            loadFromGitHub(fullPath);
-        } else {
-            const err = await res.json();
-            alert("Ошибка: " + err.message);
-        }
-    } catch (e) { alert("Ошибка при создании файла"); }
+        if (res.ok) { await listGitHubFiles(token); document.getElementById('fileSelector').value = fullPath; loadFromGitHub(fullPath); }
+    } catch (e) { alert("Ошибка"); }
 }
 
 async function listGitHubFiles(token) {
     const sel = document.getElementById('fileSelector');
     try {
-        const res = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${GH_PATH}`, { 
-            headers: { 'Authorization': `token ${token}` } 
-        });
-        if (!res.ok) throw new Error();
+        const res = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${GH_PATH}`, { headers: { 'Authorization': `token ${token}` } });
         const files = await res.json();
         sel.innerHTML = '<option value="">Выберите файл...</option>';
         files.filter(f => f.name.endsWith('.json')).forEach(f => {
             const o = document.createElement('option'); o.value = f.path; o.textContent = f.name; sel.appendChild(o);
         });
-    } catch (e) { sel.innerHTML = '<option value="">Ошибка токена</option>'; }
+    } catch (e) { sel.innerHTML = '<option value="">Ошибка API</option>'; }
 }
 
 function getIcon(azimuth, colorName, isSelected, id) {
@@ -239,37 +250,25 @@ function removePoint() {
     map.geoObjects.remove(current.pm);
     points = points.filter(p => p !== current);
     current = null;
-    points.forEach((p, i) => { 
-        p.id = i + 1; 
-        p.pm.options.set('iconImageHref', getIcon(p.azimuth, p.color, false, p.id)); 
-    });
+    points.forEach((p, i) => { p.id = i + 1; p.pm.options.set('iconImageHref', getIcon(p.azimuth, p.color, false, p.id)); });
 }
 
 async function loadFromGitHub(path) {
     if (!path) return;
     const token = document.getElementById('ghToken').value;
     try {
-        const res = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${path}`, { 
-            headers: { 'Authorization': `token ${token}` } 
-        });
+        const res = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${path}`, { headers: { 'Authorization': `token ${token}` } });
         const data = await res.json();
         currentFileSha = data.sha;
         selectedFilePath = path;
         const json = JSON.parse(decodeURIComponent(escape(atob(data.content))));
-        
         points.forEach(p => map.geoObjects.remove(p.pm));
         points = [];
-        
         json.forEach((d, index) => {
-            const p = {
-                id: d.id || (index + 1),
-                lat: d.lat, lon: d.lon, 
-                azimuth: d.azimuth || 0, color: d.color || 'Gold', command: d.command || ''
-            };
+            const p = { id: d.id || (index + 1), lat: d.lat, lon: d.lon, azimuth: d.azimuth || 0, color: d.color || 'Gold', command: d.command || '' };
             p.pm = new ymaps.Placemark([parseFloat(p.lat), parseFloat(p.lon)], { iconContent: showLabels ? p.command : "" }, {
                 iconLayout: 'default#imageWithContent', iconImageSize: [40, 40], iconImageOffset: [-20, -20], draggable: true,
-                iconImageHref: getIcon(p.azimuth, p.color, false, p.id),
-                iconContentOffset: [25, -10],
+                iconImageHref: getIcon(p.azimuth, p.color, false, p.id), iconContentOffset: [25, -10],
                 iconContentLayout: ymaps.templateLayoutFactory.createClass('{% if properties.iconContent %}<div class="cmd-bubble">$[properties.iconContent]</div>{% endif %}')
             });
             p.pm.events.add('click', () => selectPoint(p));
@@ -277,23 +276,19 @@ async function loadFromGitHub(path) {
             points.push(p);
         });
         if (points.length > 0) selectPoint(points[0]);
-        else { current = null; document.getElementById('cmdInput').value = ''; updateUI(); }
     } catch (e) { alert("Ошибка загрузки"); }
 }
 
 async function saveToGitHub() {
-    if (!selectedFilePath) return alert("Выберите файл!");
+    if (!selectedFilePath) return alert("Файл не выбран!");
     saveCmd();
     const token = document.getElementById('ghToken').value;
     const data = points.map(p => ({ id: p.id, lat: p.lat, lon: p.lon, azimuth: p.azimuth, color: p.color, command: p.command }));
-    const body = {
-        message: "Update route",
-        content: btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2)))),
-        sha: currentFileSha
-    };
     try {
         const res = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${selectedFilePath}`, {
-            method: 'PUT', headers: { 'Authorization': `token ${token}` }, body: JSON.stringify(body)
+            method: 'PUT',
+            headers: { 'Authorization': `token ${token}` },
+            body: JSON.stringify({ message: "Update", content: btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2)))), sha: currentFileSha })
         });
         const resData = await res.json();
         currentFileSha = resData.content.sha;
@@ -302,7 +297,6 @@ async function saveToGitHub() {
 }
 
 function autoResize(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
-
 function exportJSON() {
     saveCmd();
     const data = points.map(p => ({ id: p.id, lat: p.lat, lon: p.lon, azimuth: p.azimuth, color: p.color, command: p.command }));
@@ -310,7 +304,6 @@ function exportJSON() {
     a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}));
     a.download = 'route.json'; a.click();
 }
-
 function importJSON() {
     const input = document.createElement('input'); input.type = 'file';
     input.onchange = e => {
@@ -321,8 +314,7 @@ function importJSON() {
             points = [];
             json.forEach((d, i) => {
                 const p = addPoint([parseFloat(d.lat), parseFloat(d.lon)]);
-                p.id = d.id || (i + 1);
-                p.azimuth = d.azimuth || 0; p.color = d.color || 'Gold'; p.command = d.command || '';
+                p.id = d.id || (i + 1); p.azimuth = d.azimuth || 0; p.color = d.color || 'Gold'; p.command = d.command || '';
                 p.pm.properties.set('iconContent', showLabels ? p.command : "");
                 p.pm.options.set('iconImageHref', getIcon(p.azimuth, p.color, false, p.id));
             });
